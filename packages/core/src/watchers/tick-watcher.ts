@@ -1,6 +1,5 @@
 import { ArchiveClient } from '../clients/archive-client';
 import type { EventStreamMessage } from '../transport/event-stream';
-import type { EventStreamSubscription } from '../transport/event-stream';
 
 export type TickListener = (tickNumber: number) => void;
 

@@ -45,10 +45,10 @@ if (pkgJson.version === '0.0.0') {
 }
 
 console.log('\n[release] Running tests');
-await $({ cwd })`bun run test`;
+await $`cd ${cwd} && bun run test`;
 
 console.log('\n[release] Building package');
-await $({ cwd })`bun run build`;
+await $`cd ${cwd} && bun run build`;
 
 console.log('\n[release] Verification complete');
 console.log(`[release] Package: ${pkgJson.name}`);
