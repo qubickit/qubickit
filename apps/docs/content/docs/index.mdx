@@ -1,0 +1,60 @@
+---
+title: QubicKit documentation
+description: Bun-first clients, tooling, and references for the Qubic network.
+icon: BookOpen
+---
+
+QubicKit is the install-first entrypoint for building on the Qubic network. The monorepo publishes four packages (`core`, `sdk`, `cli`, `web`) that share transports, schemas, and tooling so you can adopt them à la carte without cloning this repo. These docs walk through everything you need to ship production integrations, from the lowest-level HTTP clients up through wallet orchestration, CLIs, and web dashboards.
+
+<Cards>
+  <Card title="Install the packages" href="/docs/getting-started">Learn how to add QubicKit packages to any Bun/Node project.</Card>
+  <Card title="@qubickit/core capabilities" href="/docs/core/overview">See what the transport + transaction layer ships today.</Card>
+  <Card title="Send transactions & contract payloads" href="/docs/core/transactions">Follow the end-to-end transaction recipe.</Card>
+</Cards>
+
+## Install QubicKit (no clone required)
+
+```bash
+# pick the package that matches your use case
+bun add @qubickit/core         # transports, transactions, identity helpers
+bun add @qubickit/sdk          # wallet/session orchestration (when ready)
+bun add @qubickit/cli          # CLI as a dependency (or `bun add -g @qubickit/cli`)
+bun add @qubickit/web          # React hooks/components (when ready)
+```
+
+- **Core** is production-ready today—drop it into scripts, services, or CLIs.
+- **SDK/CLI/Web** will reach parity in upcoming phases; install them when you need their capabilities.
+
+Only contributors need to clone the monorepo; everyone else installs what they need from npm and references these docs.
+
+## Packages at a glance
+
+| Package | Role | Status | Docs |
+| --- | --- | --- | --- |
+| `@qubickit/core` | Typed RPC transports, schema-backed clients, transaction tooling | Alpha | [Core capabilities](/docs/core/overview) |
+| `@qubickit/sdk` | Wallet + session orchestration that layers on top of core | In design | [SDK roadmap](/docs/sdk) |
+| `@qubickit/cli` | Bun-based CLI for diagnostics, automation, and release tasks | In design | [CLI notes](/docs/cli) |
+| `@qubickit/web` | React hooks + components that consume the SDK in browsers | Placeholder | [Web placeholder](/docs/web) |
+
+## How these docs are organized
+
+- **Getting started** explains the npm install flow first, then covers optional monorepo scripts if you plan to contribute.
+- **Core** already contains end-to-end docs (overview, client reference, transactions, utilities) for `@qubickit/core`.
+- **SDK, CLI, and Web** folders currently outline what we are building next so we can add full guides without reshuffling the IA later.
+
+## Delivery phases
+
+The roadmap from `planning/docs.md` drives how and when new sections unlock:
+
+- **Phase 0 – Platform setup**: Fumadocs on React Router, Bun scripts (`bun dev`, `bun run build`, lint/test), shared MDX conventions, and CI hooks for spell checks + broken links.
+- **Phase 1 – MVP content**: Fundamentals, quickstarts for every package, registry reference material, and FAQ/troubleshooting.
+- **Phase 2 – Reference automation**: Generated API docs (TSDoc + Zod metadata), deep dives (transaction lifecycle, contract encoding, watcher architecture), search, versioning, and diagram libraries.
+- **Phase 3 – Stable hub**: Localization scaffolding, analytics, changelog automation, cookbook recipes, governance, and release playbooks.
+
+## Contribute & share feedback
+
+:::info
+Run `bun run --cwd apps/docs dev` to preview these docs, then open issues/PRs referencing the phase checklists in `planning/docs.md`.
+:::
+
+Every page is written in MDX under `apps/docs/content/docs`, so you can import React snippets, reuse shared components, and rely on the same lint + format rules you have in the rest of the repo.

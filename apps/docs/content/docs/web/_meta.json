@@ -1,0 +1,8 @@
+{
+  "title": "@qubickit/web",
+  "icon": "Globe",
+  "description": "React hooks and components that sit on top of the SDK.",
+  "pages": [
+    "index"
+  ]
+}

@@ -1,0 +1,23 @@
+---
+title: "@qubickit/cli"
+description: How the upcoming Qubic CLI will reuse the core transports for diagnostics and automation.
+icon: Terminal
+---
+
+The CLI (`apps/cli`) is a Bun-based application that imports `@qubickit/core` so every command shares the same transports, cache adapters, and diagnostics you see throughout these docs.
+
+## Current focus
+
+- **Transport telemetry** – commands like `qubic transport:inspect` will surface `HttpClient#getDiagnostics()`, showing which hosts are healthy, which circuits are open, and what the recent request history looks like. See `apps/cli/README.md` for a code sample today.
+- **Distributed caching** – the CLI will ship helpers for wiring a `RedisCacheAdapter` (or any custom `CacheAdapter`) so multiple CLI sessions reuse the same cached responses instead of hammering public nodes.
+
+## Planned commands
+
+| Command | Purpose |
+| --- | --- |
+| `qubic balance <identity>` | Calls `HttpApiClient#getBalance` and prints available/pending balances with formatting helpers from core. |
+| `qubic tx broadcast <file>` | Reads an encoded transaction, broadcasts it, and optionally monitors settlement via `monitorTransactionStatus`. |
+| `qubic transport:inspect` | Dumps diagnostics (`hosts`, `failureCount`, request history) to stdout or JSON for automation. |
+| `qubic assets list` | Wraps the HTTP asset endpoints for quick lookups. |
+
+As the CLI takes shape, this section will expand with installation instructions, global flags (hosts, cache config, verbosity), and examples that dovetail with the SDK and Web packages.

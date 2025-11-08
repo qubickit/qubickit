@@ -1,0 +1,194 @@
+---
+title: Transports & clients
+description: Wire up transports, caching, and the surface-specific clients exported by `@qubickit/core`.
+icon: Share2
+---
+
+## HttpClient fundamentals
+
+`HttpClient` is the building block behind every higher-level client. It provides:
+
+- **Retry + failover** – configurable retry attempts/delay per request plus automatic failover across `baseUrl` + `fallbackHosts`.
+- **Timeouts + circuit breakers** – each request is wrapped in an AbortController with `timeoutMs`; repeated failures trip the breaker until `recoveryTimeMs` elapses.
+- **Diagnostics** – `getDiagnostics()` returns the active host, failure counts, and a rolling request history you can surface in CLIs or logs.
+- **Hooks & metrics** – `hooks.onRequest/onResponse` run for every request; `metrics.onSuccess/onFailure` hand you timings/status codes for observability.
+- **Caching** – any `CacheAdapter` (in-memory or distributed) can be injected per client and toggled per request via `useCache`/`cacheKey`.
+
+```ts
+import {
+  createHttpClient,
+  QubicHttpError,
+  ResponseCache,
+  RedisCacheAdapter
+} from '@qubickit/core';
+import Redis from 'ioredis';
+
+const cache = new ResponseCache(5_000); // TTL in ms, in-memory
+const redisCache = new RedisCacheAdapter(new Redis(process.env.REDIS_URL!), {
+  keyPrefix: 'qubickit:http',
+  ttlSeconds: 30
+});
+
+const http = createHttpClient({
+  baseUrl: 'https://rpc.qubic.org',
+  fallbackHosts: ['https://backup.qubic.net'],
+  timeoutMs: 10_000,
+  retry: { attempts: 2, delayMs: 250 },
+  cache: process.env.REDIS_URL ? redisCache : cache,
+  circuitBreaker: { failureThreshold: 5, recoveryTimeMs: 60_000 },
+  hooks: {
+    onRequest: ({ url }) => console.debug('[http] →', url)
+  },
+  metrics: {
+    onFailure: ({ url, status, durationMs, error }) => {
+      console.warn('Qubic RPC failure', { url, status, durationMs, error });
+    }
+  }
+});
+
+try {
+  const payload = await http.request({ path: '/v1/status', useCache: true });
+  console.log(payload);
+} catch (error) {
+  if (error instanceof QubicHttpError) {
+    console.error(error.status, error.body);
+  }
+}
+```
+
+`RequestOptions` accepts `path`, `method`, `query`, `headers`, `body`, `signal`, plus cache controls (`cacheKey`, `useCache`). Responses are parsed as JSON when possible, otherwise returned as strings.
+
+### Options reference
+
+| Option | Purpose |
+| --- | --- |
+| `baseUrl` / `fallbackHosts` | Primary + backup hosts to rotate through when the active host fails. |
+| `defaultHeaders` | Headers merged into every request (useful for API keys, user agents). |
+| `retry` | `{ attempts, delayMs }` controls exponential-style retries per host before failover. |
+| `timeoutMs` | Abort threshold per request (defaults to 30s). |
+| `circuitBreaker` | `{ failureThreshold, recoveryTimeMs }` counts consecutive failures and pauses a host until the cooldown expires. |
+| `cache` | Any `CacheAdapter` implementation (`ResponseCache`, `MemoryLRUCache`, `RedisCacheAdapter`, or custom). |
+| `hooks` | `onRequest({ url, init })` / `onResponse({ url, response })` for logging and debugging. |
+| `metrics` | `onSuccess` / `onFailure` receive `{ url, method, status, durationMs, host }` (plus `error`). |
+| `fetchImpl` | Provide a custom `fetch` (handy for tests or Bun/Node polyfills). |
+| `requestHistorySize` | Number of entries `getDiagnostics()` keeps in memory (default 50). |
+
+`RequestOptions` mirrors the HTTP verbs you expect but also supports:
+
+- `query` object (values converted to strings, undefined values skipped).
+- `cacheKey` + `useCache` toggles so you can mix cached + non-cached reads per method.
+- Arbitrary `headers`/`body` for POST/PUT/PATCH.
+
+## Core transports & createQubicCore
+
+`createCoreTransports` accepts `CoreTransportOptions` (`hosts`, `defaultHeaders`, `timeoutMs`, `hooks`) and returns a map of `HttpClient` instances keyed by `archive`, `http`, `stats`, and `query`. `createQubicCore` wraps that map with the higher-level clients so you rarely instantiate them manually:
+
+```ts
+import { createCoreTransports, ArchiveClient } from '@qubickit/core';
+
+const transports = createCoreTransports({
+  hosts: { archive: 'https://custom-archive.qubic.org' },
+  timeoutMs: 6_000
+});
+
+const archive = new ArchiveClient(transports.archive);
+const tick = await archive.getLatestTick();
+```
+
+You can still pass a custom `HttpClient` instance to any client constructor when you need features (e.g., shared cache) that are not configured globally.
+
+`CoreTransportOptions` is intentionally small:
+
+| Option | Description |
+| --- | --- |
+| `hosts?: Partial<HostRegistry>` | Override one or more host URLs (`archive`, `http`, `stats`, `query`). |
+| `defaultHeaders?: Record<string, string>` | Inject headers across every transport. |
+| `timeoutMs?: number` | Default request timeout per transport (can be overridden per request). |
+| `hooks?: HttpClientOptions['hooks']` | Share logging hooks across transports. |
+
+## ArchiveClient
+
+Archive endpoints mirror the native node’s tick/transaction data. Each method parses responses with the schema in `src/models/archive-schemas.ts`, so you get rich typings and runtime validation.
+
+```ts
+const { archive } = createQubicCore();
+
+const latest = await archive.getLatestTick();
+const tickNumber = latest.tickData?.tickNumber!;
+
+const [tickData, txIds] = await Promise.all([
+  archive.getTickData(tickNumber),
+  archive.getTickTransactions(tickNumber)
+]);
+
+const tx = await archive.getTransaction(txIds.transactions?.[0]?.txId ?? '');
+const status = await archive.getTransactionStatus(tx.transaction?.txId ?? '');
+```
+
+- `getTickData(tickNumber)` and `getTickTransactions(tickNumber)` accept integers and cache by default.
+- `getStatus()` returns peer + quorum information exported by the archive host.
+- `getLatestTick()` is a lightweight helper you can poll from watchers.
+
+## HttpApiClient
+
+The HTTP API focuses on balances, asset registries, broadcasting, and contract queries.
+
+```ts
+const { http } = createQubicCore();
+
+const balance = await http.getBalance('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
+const issuances = await http.getAssetIssuances();
+const myAssets = await http.getAssetsByIdentity(balance.balance.identity);
+
+const broadcast = await http.broadcastTransaction('<base64>');
+const contractResult = await http.querySmartContract({
+  contractIndex: 42,
+  inputType: 1,
+  requestData: 'deadbeef'
+});
+```
+
+- Asset helpers (`getAssetIssuances`, `getAssetOwnerships`, `getAssetPossessions`, `getAssetsByIdentity`) expose filters that map directly to the HTTP query parameters.
+- `getTickInfo()` returns the current tick/epoch combo straight from the HTTP host, useful when you do not want to hit the archive surface.
+- `querySmartContract` is a thin wrapper around `/v1/querySmartContract`; combine it with the transaction helpers to pre-validate payloads before sending them on-chain.
+
+## StatsClient
+
+`StatsClient` keeps the documentation organized even though it hits the same base host:
+
+```ts
+const stats = await core.stats.getLatestStats();
+const richList = await core.stats.getRichList();
+```
+
+Both methods use caching by default because their upstream data changes on a slower cadence.
+
+## QueryServiceClient
+
+The query service is run by partner infrastructure and behaves a little differently (POSTs rather than GETs). The client handles pagination and export-friendly data structures.
+
+```ts
+const { query } = createQubicCore();
+
+const tx = await query.getTransactionByHash('0xabc...');
+const history = await query.getTransactionsForIdentity('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', {
+  limit: 100,
+  from: 0
+});
+
+const transfers = await query.getTransfersByIdentity('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', {
+  pageSize: 250,
+  autoPaginate: true
+});
+```
+
+`getTransfersByIdentity` keeps fetching pages until it exhausts the cursor (unless `autoPaginate` is set to `false`), so you get a single array ready for CSV exports or dashboards.
+
+## Diagnostics and health checks
+
+Every `HttpClient` exposes:
+
+- `getDiagnostics()` – the active host, the failure count per host, whether any circuits are currently open, and a copy of the recent request history (`method`, `url`, `status`, `duration`, `ok` flag).
+- `getRequestHistory()` – the raw history array when you want to roll your own telemetry view.
+
+Pair these with the CLI (`apps/cli`) to build commands such as `qubic transport:inspect`, or ship them to your logging pipeline to correlate downstream failures with peer health.

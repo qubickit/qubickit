@@ -1,0 +1,8 @@
+{
+  "title": "@qubickit/cli",
+  "icon": "Terminal",
+  "description": "Bun-based CLI that reuses the core transports for diagnostics and automation.",
+  "pages": [
+    "index"
+  ]
+}

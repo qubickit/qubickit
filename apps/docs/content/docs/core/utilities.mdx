@@ -1,0 +1,141 @@
+---
+title: Utilities & observability
+description: Identity helpers, watchers, caches, and diagnostics that round out `@qubickit/core`.
+icon: Wrench
+---
+
+## Identity helpers
+
+`createIdentityPackage(seed, index?)` derives a private/public key pair plus the 60-character identity string using the same KangarooTwelve + SchnorrQ flow as the native node.
+
+- Seeds must be 55 lowercase letters (`a-z`). `validateSeed(seed)` throws if the format is wrong; `seedToBytes(seed)` returns the raw alphabet-indexed bytes the crypto helper expects.
+- `derivePrivateKey(seed, index)` is exposed for advanced flows (e.g., deterministic scanning) when you only need the 32-byte private key.
+- `identityToPublicKey(identity)` / `publicKeyToIdentity(publicKey, lowerCase?)` convert between formats.
+- `verifyIdentity(identity)` regenerates the checksum and confirms the identity is self-consistent.
+- The `createIdentityPackage` return value contains `privateKey`, `publicKey`, `publicKeyWithChecksum`, and the 60-character `identity`.
+
+```ts
+import { createIdentityPackage } from '@qubickit/core';
+
+const identity = await createIdentityPackage(process.env.QUBIC_SOURCE_SEED!, 0);
+console.log(identity.identity);
+```
+
+Use it together with `transaction-builder` utilities to create offline signing flows or seed vaults.
+
+## Amount & tick helpers
+
+The utility exports keep common transformations centralized:
+
+- `normalizeAmount(value)` → `bigint` normalized to the ledger format.
+- `parseTickRange(input)` → `{ start: number; end: number }`, helpful when parsing CLI flags like `--ticks 1000..2000`.
+- `toBase64` / `fromBase64` – simplified wrappers around Bun/Node buffers.
+- `attachNetworkMetadata` – merges tick/timeLock/varStruct data into drafts.
+
+## TickWatcher
+
+`TickWatcher` polls the archive or consumes SSE events to notify listeners about new ticks. It automatically replays any missed ticks in order.
+
+```ts
+import { TickWatcher } from '@qubickit/core';
+
+const watcher = new TickWatcher(core.archive, {
+  intervalMs: 5_000,
+  latestTickProvider: async () => {
+    const latest = await core.archive.getLatestTick();
+    return latest.tickData?.tickNumber ?? 0;
+  }
+});
+
+const unsubscribe = watcher.onTick((tick) => console.log('new tick', tick));
+watcher.start();
+```
+
+When an SSE endpoint is available, pair it with the `EventStreamClient` so you only fall back to polling if the stream dies:
+
+```ts
+import { EventStreamClient, TickWatcher } from '@qubickit/core';
+
+const stream = new EventStreamClient('https://rpc.qubic.org');
+
+const watcher = new TickWatcher(core.archive, {
+  eventStream: {
+    createSubscription: () => stream.subscribe('/v1/ticks/stream', { reconnect: true }),
+    parseEvent: (event) => JSON.parse(event.data).tickNumber
+  },
+  intervalMs: 10_000 // used only if the stream disconnects
+});
+```
+
+## EventStreamClient & subscriptions
+
+`EventStreamClient` wraps Server-Sent Events (SSE) endpoints and exposes `subscribe(path, options)` which returns an `EventStreamSubscription`. It handles reconnects, retry delays, abort signals, and header injection.
+
+```ts
+import { EventStreamClient } from '@qubickit/core';
+
+const events = new EventStreamClient('https://rpc.qubic.org', {
+  headers: { 'x-app-id': 'qubickit-web' },
+  reconnect: true,
+  retryDelayMs: 2_000
+});
+
+for await (const message of events.subscribe('/v1/ticks/stream')) {
+  console.log(message.id, message.data);
+}
+```
+
+You can plug any `EventStreamSubscription` into `TickWatcher` (as shown above) or process the events manually for bespoke dashboards and analytics jobs.
+
+## Cache adapters
+
+Cache hits keep transport traffic low, especially for CLIs or dashboards where multiple instances may run simultaneously.
+
+| Adapter | Use case |
+| --- | --- |
+| `ResponseCache` | Simple TTL cache with eviction once it reaches `maxEntries`. Ideal for per-process caches. |
+| `MemoryLRUCache` | Bounded LRU cache without TTL logic. Great when you know roughly how many active keys you expect. |
+| `RedisCacheAdapter` | Share responses across processes. It accepts any Redis-like client (`ioredis`, `redis`) plus optional `ttlSeconds` and `keyPrefix`. |
+
+All adapters implement the `CacheAdapter` interface:
+
+```ts
+export interface CacheAdapter<T = unknown> {
+  get(key: string): T | undefined | Promise<T | undefined>;
+  set(key: string, value: T): void | Promise<void>;
+  delete?(key: string): void | Promise<void>;
+  clear?(): void | Promise<void>;
+}
+```
+
+Bring your own (Cloudflare KV, Upstash, DynamoDB, etc.) by implementing that contract.
+
+## Error classes
+
+The transports throw specific errors that you can catch and react to:
+
+| Error | Description |
+| --- | --- |
+| `QubicHttpError` | Response returned a non-2xx status. Includes `status` and parsed `body`. |
+| `QubicTimeoutError` | The request exceeded `timeoutMs`. |
+| `QubicCircuitOpenError` | The circuit breaker skipped a host because it is unhealthy. |
+| `QubicValidationError` | Zod validation failed when parsing a response. |
+
+Handling these explicitly is the easiest way to provide actionable feedback in the CLI or SDK layers.
+
+## Diagnostics & telemetry
+
+Every `HttpClient` keeps a rolling history (`requestHistorySize`, default 50 entries). Surface it when debugging:
+
+```ts
+const diagnostics = core.transports.http.getDiagnostics();
+console.table(diagnostics.hosts);
+console.table(diagnostics.recentRequests.slice(-5));
+```
+
+Pair `metrics.onSuccess/onFailure` with whatever telemetry stack you use. Because the info includes `url`, `method`, `status`, `durationMs`, and `host`, you can correlate downstream errors with upstream peers quickly.
+
+## Tooling references
+
+- The CLI (`apps/cli`) already contains snippets that read transport diagnostics and exercise cache adapters. Reuse those patterns when building new commands.
+- The research notes in `docs/core-notes.md` explain why the seed derivation, transaction layout, and watcher behavior look the way they do. Refer to them when validating new helpers.

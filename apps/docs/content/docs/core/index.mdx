@@ -1,0 +1,37 @@
+---
+title: "@qubickit/core"
+description: Entry point to the `@qubickit/core` guides, references, tutorials, and use cases.
+icon: Cpu
+---
+
+`@qubickit/core` gives you the primitives that every other QubicKit package builds on: typed transports, schema-backed clients, transaction tooling, identity helpers, watchers, SSE clients, cache adapters, and diagnostics. Use this page as the jumping-off point for the rest of the Core docs.
+
+## Start here
+
+<Cards>
+  <Card title="Core capabilities" href="/docs/core/overview">Understand what ships inside the package and how it underpins the rest of QubicKit.</Card>
+  <Card title="Transports & clients" href="/docs/core/clients">See how to configure the HTTP transports and surface-specific clients.</Card>
+  <Card title="Transactions & contracts" href="/docs/core/transactions">Draft, sign, broadcast, and monitor transactions end to end.</Card>
+</Cards>
+
+## Learn by building
+
+<Cards>
+  <Card title="Tutorials" href="/docs/core/tutorials">Step-by-step guides for transfers, CLIs, watchers, caching, and webhooks.</Card>
+  <Card title="Use cases" href="/docs/core/use-cases">Reference implementations for dashboards, pipelines, and alerting.</Card>
+  <Card title="Utilities & observability" href="/docs/core/utilities">Identity helpers, cache adapters, diagnostics, and watcher APIs.</Card>
+</Cards>
+
+## Install only what you need
+
+```bash
+# core transports + tooling (ready today)
+bun add @qubickit/core
+
+# higher-level packages (add later as they ship)
+bun add @qubickit/sdk
+bun add @qubickit/cli
+bun add @qubickit/web
+```
+
+Head back to the [Transports & clients](/docs/core/clients) page once you install the package and want to wire it into your project.

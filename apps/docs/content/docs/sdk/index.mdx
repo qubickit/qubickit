@@ -1,0 +1,233 @@
+---
+title: "@qubickit/sdk"
+description: What the `@qubickit/sdk` package will provide on top of `@qubickit/core`.
+icon: Layers
+---
+
+`@qubickit/sdk` is the opinionated layer that wraps the core transports with wallet/session orchestration, adapters, and higher-level watcher APIs. The implementation recently entered **Phase 0**, so you can already explore the scaffolding that links the SDK to `@qubickit/core`.
+
+## Phase 0 snapshot
+
+### Workspace wiring
+
+- `packages/sdk` now shares the Bun toolchain with the rest of the monorepo: `tsup` builds, `vitest` drives unit tests, and path aliases expose the package internally as `@qubickit/sdk/*`.
+- `createQubicSdk` composes `createQubicCore` and exposes the default adapter stack (storage, cache, transport hooks) so higher phases can focus on wallet/session logic without restitching transports.
+
+```ts
+import { createQubicSdk } from '@qubickit/sdk';
+
+const sdk = createQubicSdk({
+  defaultHeaders: { 'x-qubickit': 'docs' }
+});
+
+// Direct access to the proven core clients
+const ticks = await sdk.core.query.fetchTicks({ limit: 5 });
+```
+
+### Adapter interfaces
+
+- `createMemoryStorageAdapter` and `createMemoryCacheAdapter` accept a Zod schema and enforce input/output validation for every driver (custom drivers just implement the same interfaces).
+- A transport hooks registry coordinates request/response/error lifecycles around any core client call, giving higher phases a place to attach telemetry, retries, or throttling.
+
+```ts
+import { createMemoryStorageAdapter, createTransportHooksRegistry } from '@qubickit/sdk';
+import { z } from 'zod';
+
+const sessions = createMemoryStorageAdapter({
+  schema: z.object({ id: z.string(), createdAt: z.number() }),
+  namespace: 'demo-sessions'
+});
+
+const hooks = createTransportHooksRegistry();
+hooks.register({
+  beforeRequest: ({ method }) => console.debug('[sdk]', method),
+  afterResponse: ({ durationMs }) => console.debug('completed in', durationMs, 'ms')
+});
+```
+
+### Event emitters, observables & watcher channels
+
+- A lightweight `TypedEventEmitter` + `Observable` pair replaces the need for RxJS while still supporting abort-aware subscriptions and async iteration.
+- `WatchChannel` sits on top of the emitter and standardises `data`, `error`, and `status` events; future watchers (ticks, balances, transfers) will publish through this abstraction.
+
+```ts
+import { WatchChannel } from '@qubickit/sdk';
+
+const balances = new WatchChannel<{ account: string; amount: string }>();
+
+const subscription = balances.subscribe((payload) => {
+  console.log(`${payload.account} = ${payload.amount}`);
+});
+
+balances.updateStatus('running');
+balances.emitData({ account: 'EQ...', amount: '123' });
+subscription.unsubscribe();
+```
+
+## Phase 1 snapshot (WIP)
+
+### Wallet manager + session tokens
+
+- `WalletManager` persists encrypted seeds (AES-GCM via WebCrypto/Node crypto) through the storage adapter interface so you can swap in IndexedDB/filesystem later.
+- Profiles can hold multiple derived accounts; the manager tracks derivation indexes, labels, and issues session tokens that surface `identityPackage` data without re-entering the seed.
+
+```ts
+import { createQubicSdk } from '@qubickit/sdk';
+
+const sdk = createQubicSdk();
+
+const profile = await sdk.wallet.createProfile({
+  seed: 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyabcd',
+  passphrase: process.env.WALLET_PASSWORD!,
+  label: 'docs-demo'
+});
+
+const session = await sdk.wallet.issueSessionToken({
+  profileId: profile.profileId,
+  passphrase: process.env.WALLET_PASSWORD!,
+  derivationIndex: 0
+});
+
+console.log('Session token expires at', new Date(session.expiresAt));
+```
+
+### Session client + fallbacks
+
+- `sdk.createSessionClient()` wires the transport hooks + cache adapter into a higher-level client that caches identity queries and falls back from Query Service → Archive when fetching individual transactions.
+- Wallet sessions can be resumed inside handlers, which keeps CLI/web flows aligned (unlock once, reuse the token until expiry).
+- `sessionClient.streamTransactions(identity)` auto-paginates Query Service results, so watchers can iterate without reimplementing offset math, and `sessionClient.getBalance()` shares the same cache/throttle knobs.
+
+```ts
+const sessionClient = sdk.createSessionClient();
+
+const tx = await sessionClient.getTransactionByHash('0xabc', {
+  fallback: ['query', 'archive']
+});
+
+const recent = await sessionClient.listTransactions(session.account.identity, { limit: 10 });
+
+for await (const tx of sessionClient.streamTransactions(session.account.identity, { pageSize: 25 })) {
+  console.log('historical tx', tx.hash);
+}
+```
+
+### Watchers for ticks + transfers
+
+- `createTickStream` bridges the core tick watcher into the SDK’s `WatchChannel`, so you get abort-aware subscriptions or async iteration.
+- `SessionClient.watchTransfers(identity)` polls `getTransactionsForIdentity`, deduplicates hashes, and emits `TransferEvent` payloads you can pipe into React state, CLIs, or server-sent events.
+- `createBalanceWatcher` and `createContractWatcher` share the same telemetry/signaling API, so you can log poll cycles, capture errors, or stop all watchers with a single `AbortController`.
+
+```ts
+import { createTickStream, createBalanceWatcher, createContractWatcher } from '@qubickit/sdk';
+
+const { channel: tickChannel, stop } = createTickStream(sdk);
+const tickSub = tickChannel.subscribe((tick) => console.log('Tick', tick));
+
+const transferWatch = sessionClient.watchTransfers(session.account.identity, { intervalMs: 2500 });
+transferWatch.channel.subscribe(({ transaction }) => {
+  console.log('New transfer', transaction.hash);
+});
+
+const balanceWatch = createBalanceWatcher(sdk, { identity: session.account.identity, intervalMs: 1500 });
+balanceWatch.channel.subscribe(({ balance }) => {
+  console.log('Balance changed to', balance.amount);
+});
+
+const contractWatch = createContractWatcher(sessionClient, {
+  contractIdentity: 'QBCONTRACT123',
+  intervalMs: 4000
+});
+contractWatch.channel.subscribe(({ transaction }) => {
+  console.log('Contract event', transaction.hash);
+});
+```
+
+## Phase 2 preview
+
+### Contract registry + metadata
+
+- `sdk.contracts.registry` ingests the frozen snapshot in `static/registry/smart_contracts.json`, validates it with Zod, and exposes lookups by index, address, or label.
+- `sdk.contracts.service.call()` uses that registry data to hit the HTTP contract endpoint without hand-writing contract indexes.
+
+```ts
+const qubicX = sdk.contracts.registry.findByName('QX');
+const response = await sdk.contracts.service.call({
+  contract: qubicX?.contractIndex ?? 1,
+  inputType: 1
+});
+```
+
+### Transfer / invoke orchestration + queues
+
+- `sdk.transfers.send()` wraps draft → sign → broadcast → monitor; it accepts seeds or session tokens, emits telemetry hooks, and enqueues the request automatically if a broadcast fails.
+- `sdk.contracts.service.invoke()` delegates to the transfer pipeline, so calling a contract procedure is a one-liner.
+
+```ts
+const telemetry = {
+  onDraft: ({ txId }) => console.info('drafted', txId),
+  onSettled: ({ txId }) => console.info('settled', txId)
+};
+
+await sdk.transfers.send({
+  signer: { sessionToken: session.token },
+  destination: 'BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID',
+  amount: '1'
+}, { telemetry });
+
+await sdk.contracts.service.invoke({
+  contract: 'QX',
+  procedureId: 1,
+  signer: { sessionToken: session.token },
+  amount: '0'
+});
+```
+
+### Persistence adapters & command queue
+
+- Persistence adapters now cover memory, filesystem, IndexedDB (for the web), and an encrypted wrapper that uses the same AES-GCM helper as the wallet manager.
+- `CommandQueue` persists retries via whichever adapter you wire in; for example, you can keep a JSON file on disk for CLI usage or use IndexedDB when embedding the SDK in a browser service worker.
+
+## Phases
+
+The roadmap mirrors the milestones captured in `planning/sdk.md`:
+
+### Phase 0 – Foundation & scaffolding
+
+- Wire the SDK to `@qubickit/core` (path aliases, Bun/Vitest setup, workspace references).
+- Define adapter interfaces for storage, cache, and transport hooks (with in-memory defaults guarded by Zod).
+- Establish watcher primitives (Promise-based subscriptions, abort-safe loops) and document how they layer over TickWatcher/EventStream from core.
+- Publish docs explaining when to reach for the SDK vs. using the core package directly.
+
+### Phase 1 – Wallet & session layer
+
+- `WalletManager` handles seed import/export (with encryption), multi-account profiles, derivation indices, and session tokens.
+- `SessionClient` composes the core clients with caching/throttling and configurable fallback order (Query Service → Archive, etc.).
+- Watcher APIs for ticks, balances, transfers, and contract events with telemetry hooks and abort options.
+- Example Bun script that imports a seed, streams balances, and watches ticks.
+
+### Phase 2 – Contract & transaction orchestration
+
+- Contract registry ingestion (scraping `static.qubic.org` + `contract_def.h`) with Zod validation and caching.
+- High-level flows such as `sdk.transfers.send()` (draft → sign → broadcast → monitor) and `sdk.contracts.call/invoke()` (with dry-run/offline signing support).
+- Persistence adapters (IndexedDB ponyfill, filesystem, secure enclave) plus command queue/resume logic for failed broadcasts.
+
+### Phase 3 – Stable feature set
+
+- Multi-wallet orchestration, background sync daemons, metrics hooks, typed SDK errors, structured logging, and documented upgrade paths.
+- Compatibility testing (Node 18/20, Bun nightly) and regression suites for watcher performance.
+- Versioned API references and migration guides.
+
+## Core vs SDK (today)
+
+- Reach for `@qubickit/core` when you want the bare transports (`ArchiveClient`, `QueryServiceClient`, etc.) or need to embed the lowest-level primitives in existing infrastructure.
+- Reach for `@qubickit/sdk` when you want adapters, observables, and watcher-friendly ergonomics out of the box—Phase 0 lays the groundwork, and upcoming phases will add wallet/session orchestration on top of the same transport stack.
+
+## How this page will evolve
+
+Once the SDK code matures, this section will host:
+
+- Conceptual guides (wallet vaults, session management, watcher telemetry).
+- API references generated from TSDoc + Zod schemas.
+- Recipes that show SDK + CLI (+ Web) working together (for example, sending a transfer from the CLI and reflecting it in a web dashboard).
+
+Until then, use the core docs to build against today’s transports and revisit this page for progress updates.

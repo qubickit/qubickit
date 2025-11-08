@@ -1,0 +1,14 @@
+{
+  "title": "@qubickit/core",
+  "icon": "Cpu",
+  "description": "Typed transports, schema-backed clients, and transaction tooling.",
+  "pages": [
+    "index",
+    "overview",
+    "clients",
+    "transactions",
+    "utilities",
+    "tutorials",
+    "use-cases"
+  ]
+}

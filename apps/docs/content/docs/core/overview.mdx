@@ -1,0 +1,127 @@
+---
+title: Core capabilities
+description: Understand what ships inside `@qubickit/core` and how it underpins the rest of QubicKit.
+icon: Cpu
+---
+
+`@qubickit/core` is the lowest layer in the QubicKit stack. It owns the HTTP transports, schema-generated models, transaction tooling, identity helpers, watchers, streaming clients, caches, and diagnostics that every other package (SDK, CLI, Web) builds upon. You install it from npm and wire only the pieces you need.
+
+## Responsibilities
+
+- **Typed transports** – `HttpClient` wraps fetch with retries, timeout handling, circuit breakers, caching hooks, request history, and diagnostics.
+- **Surface-specific clients** – `ArchiveClient`, `HttpApiClient`, `StatsClient`, and `QueryServiceClient` map the Qubic RPC surfaces into ergonomic methods that validate responses with Zod.
+- **Transaction tooling** – helpers such as `createTransactionDraft`, `buildUnsignedTransaction`, `signTransaction`, and `monitorTransactionStatus` give you end-to-end flows for transfers and contract payloads.
+- **Identity + crypto** – `createIdentityPackage` reproduces the KangarooTwelve/SchnorrQ seed derivation that the native node uses, so signatures are parity-tested.
+- **Watchers + SSE** – `TickWatcher` and the `EventStreamClient` turn archive polling or SSE feeds into callbacks, perfect for live dashboards and telemetry.
+- **Cache adapters** – ready-to-use adapters (`ResponseCache`, `MemoryLRUCache`, `RedisCacheAdapter`) keep the transports fast across CLIs, servers, and background workers.
+- **Error + diagnostics** – exported error classes (`QubicHttpError`, `QubicTimeoutError`, etc.) plus `HttpClient#getDiagnostics()` power CLIs and logging hookups.
+
+Everything is written in TypeScript, runs on Bun's toolchain, and exports typed entry points so downstream packages can tree-shake what they need.
+
+## Default hosts & registry
+
+The package exports the `HostKey` union (`'archive' | 'http' | 'stats' | 'query'`), the `HostRegistry` type (record of those keys), and a `DEFAULT_HOSTS` object pointing at the public infrastructure:
+
+```ts
+import { DEFAULT_HOSTS, type HostRegistry } from '@qubickit/core';
+
+const customHosts: HostRegistry = {
+  ...DEFAULT_HOSTS,
+  http: 'https://custom-http.qubic.org'
+};
+```
+
+Pass partial overrides to `createCoreTransports`/`createQubicCore` to swap endpoints per environment. Because everything is typed, you cannot forget a host or accidentally mistype a key.
+
+## Export map
+
+Most consumers stick with `createQubicCore`, but you can import the building blocks individually. Highlights from `packages/core/src/index.ts`:
+
+| Category | Exports |
+| --- | --- |
+| Transport + config | `createHttpClient`, `HttpClient`, `createCoreTransports`, `createQubicCore`, `DEFAULT_HOSTS`, `type CoreTransportOptions`, `type HostRegistry`, `type HostKey` |
+| Surface clients | `ArchiveClient`, `HttpApiClient`, `StatsClient`, `QueryServiceClient` |
+| Transactions | `createTransactionDraft`, `attachNetworkMetadata`, `buildUnsignedTransaction`, `signTransaction`, `encodeSignedTransaction`, `serializeTimeLock`, `deserializeTimeLock`, `serializeVarStruct`, `deserializeVarStruct`, `broadcastEncodedTransaction`, `monitorTransactionStatus` |
+| Contracts | `querySmartContract` helper (wraps the HTTP client) |
+| Identity & crypto | `createIdentityPackage`, `identityToPublicKey`, `publicKeyToIdentity`, `validateSeed`, etc. (see Utilities) |
+| Watchers + streaming | `TickWatcher`, `EventStreamClient`, `EventStreamSubscription` |
+| Cache | `ResponseCache`, `MemoryLRUCache`, `RedisCacheAdapter`, `type CacheAdapter` |
+| Utils | `normalizeAmount`, `parseTickRange`, `toBase64`, `fromBase64`, error classes |
+
+The rest of this section drills into each group so you know when to reach for them.
+
+## Surface map
+
+| Surface | Client | Key methods |
+| --- | --- | --- |
+| Archive (`https://rpc.qubic.org/v1/...`) | `ArchiveClient` | `getTickData`, `getTickTransactions`, `getTransaction`, `getTransactionStatus`, `getLatestTick`, `getStatus` |
+| HTTP API (`/v1/*`) | `HttpApiClient` | `getBalance`, `broadcastTransaction`, `getAssetIssuances/Ownerships/Possessions`, `getAssetsByIdentity`, `getTickInfo`, `querySmartContract` |
+| Stats (`/v1/latest-stats`, `/v1/rich-list`) | `StatsClient` | `getLatestStats`, `getRichList` |
+| Partner query service (`https://api.qubic.org`) | `QueryServiceClient` | `getTransactionByHash`, `getTransactionsForIdentity`, `getTransfersByIdentity` |
+
+You can use the clients directly, or you can call `createQubicCore` to compose them with a shared transport registry and tick watcher.
+
+## Bootstrap the core
+
+```ts
+import {
+  createQubicCore,
+  type CoreTransportOptions,
+  createTransactionDraft,
+  monitorTransactionStatus
+} from '@qubickit/core';
+
+const options: CoreTransportOptions = {
+  hosts: {
+    http: 'https://rpc.qubic.org',
+    archive: 'https://rpc.qubic.org',
+    stats: 'https://rpc.qubic.org',
+    query: 'https://api.qubic.org'
+  },
+  timeoutMs: 8_000,
+  hooks: {
+    onRequest: ({ url }) => console.debug('[qubic:http]', url)
+  }
+};
+
+const core = createQubicCore(options);
+const latest = await core.archive.getLatestTick();
+const signed = await createTransactionDraft(
+  {
+    sourceSeed: process.env.QUBIC_SOURCE_SEED!,
+    destinationId: process.env.QUBIC_DESTINATION_ID!,
+    amount: 1_000_000,
+    tickNumber: latest.tickData?.tickNumber
+  }
+);
+
+const broadcast = await core.http.broadcastTransaction(signed.encoded);
+if (broadcast.transactionId) {
+  await monitorTransactionStatus(core.archive, broadcast.transactionId, {
+    pollIntervalMs: 5_000,
+    timeoutMs: 120_000,
+    queryClient: core.query
+  });
+}
+```
+
+`createQubicCore` uses `DEFAULT_HOSTS` for every transport unless you override them. Internally it calls `createCoreTransports`, which in turn instantiates one `HttpClient` per host key (archive, http, stats, query). You can also construct your own transport map when you need advanced features such as fallback hosts or custom fetch implementations.
+
+## Schema & model workflow
+
+Most response types live under `packages/core/src/models`, generated from the upstream Swagger/OpenAPI specs. Regenerate them whenever the Qubic RPC surfaces change:
+
+```bash
+bun run --cwd packages/core schemas:download
+bun run --cwd packages/core schemas:generate
+```
+
+The generated Zod schemas power the runtime validation done in each client (which is why every method surfaces `QubicValidationError` if upstream responses drift).
+
+## Relationship to other packages
+
+- **SDK** will re-export the core transports and add wallet/session orchestration (`SessionClient`, watchers, caching policies). Every SDK guide will assume you already understand the core concepts documented here.
+- **CLI** binds the same transports to commands (`qubic balance`, `qubic transport:inspect`, etc.) and relies on `HttpClient#getDiagnostics()` plus cache adapters to reason about peer health.
+- **Web** depends on the SDK to share hooks/components across dashboards, so its docs will reference both the SDK and the lower-level pages you are reading now.
+
+Because the foundational docs live inside `/docs/core/*`, we can keep expanding them (deep dives, API references, recipes) without breaking the IA for the higher-level packages.

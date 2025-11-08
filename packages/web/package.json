@@ -1,0 +1,22 @@
+{
+  "name": "@qubickit/web",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "build": "echo \"TODO: wire tsup build\"",
+    "lint": "echo \"TODO: add lint step\"",
+    "test": "echo \"TODO: add tests\""
+  },
+  "dependencies": {
+    "@qubickit/sdk": "workspace:*"
+  }
+}

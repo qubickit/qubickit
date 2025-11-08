@@ -1,0 +1,35 @@
+---
+title: Install & set up QubicKit
+description: Install QubicKit packages into your project first, then learn how to work inside the monorepo when you need to contribute.
+icon: Download
+---
+
+QubicKit is meant to be installed straight from npm. You do **not** need this repository unless you are contributing to the packages or docs.
+
+## Install the packages
+
+```bash
+# add packages individually based on what you are building
+bun add @qubickit/core         # transports, transactions, identity helpers
+bun add @qubickit/sdk          # wallet/session orchestration (when ready)
+bun add @qubickit/cli          # CLI as dependency (or `bun add -g @qubickit/cli`)
+bun add @qubickit/web          # React hooks/components (when ready)
+```
+
+- **@qubickit/core** – ready today; drop it into scripts, services, or CLIs.
+- **@qubickit/sdk** – upcoming wallet/session orchestration layer (install once the API ships).
+- **@qubickit/cli** – Bun-based CLI (install per project or globally with `bun add -g @qubickit/cli`).
+- **@qubickit/web** – React hooks/components layered on the SDK (install when you ship dashboards).
+
+Once installed you can import everything exactly as the packages export it:
+
+```ts
+import { createQubicCore } from '@qubickit/core';
+
+const core = createQubicCore({
+  timeoutMs: 8_000,
+  hosts: { http: 'https://rpc.qubic.org' }
+});
+```
+
+Follow the [Core overview](/docs/core/overview) for the current surface area, then layer on SDK/CLI/Web features as they ship.

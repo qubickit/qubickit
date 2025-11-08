@@ -1,0 +1,51 @@
+---
+title: What is Qubic?
+description: A primer on the Qubic network, its node architecture, and why QubicKit exists.
+icon: BookOpen
+---
+
+Qubic is a high-throughput decentralized computing protocol. Its reference implementation is a performance-focused C++ node that targets bare-metal hardware (AVX2/AVX-512 CPUs, terabytes of RAM, EFI boot). QubicKit exists so you can interact with that network from modern TypeScript/Bun tools without rewriting the native plumbing.
+
+## Hardware & deployment expectations
+
+- **Bare metal only** – nodes boot directly via UEFI, not via a traditional OS. Operators typically dedicate at least 8 high-frequency cores (AVX2/AVX-512), 2 TB of RAM, and NVMe storage.
+- **EFI boot disk** – the boot medium must be FAT32 with a predictable layout (`/system`, `/spectrum.<epoch>`, `/universe.<epoch>`, `/contractXXXX.<epoch>`, `/efi/boot/Qubic.efi`). Updating the node often means swapping in the latest spectrum/universe/contract snapshots.
+- **Network stack** – UEFI networking is configured in `startup.nsh` (for example: set timezone, bring up DHCP, launch the EFI binary). Nodes maintain their own peer lists and require at least a gigabit synchronous link.
+- **Listen vs. computor** – listen-only nodes simply observe traffic; computor nodes also submit solutions/seeds and therefore need operator identities plus verified public peers configured ahead of time.
+
+Understanding these constraints explains why the public RPC hosts look the way they do (afile-based snapshots, tick metadata, etc.). QubicKit packages are designed so you do not need to run this stack just to build apps.
+
+## How the protocol behaves
+
+- **Ticks** – Qubic advances in fixed-time “ticks.” Each tick carries transactions, contract state updates, and metadata such as `timeLock` and `varStruct`. Archive APIs (`/v1/ticks/*`) expose this data verbatim, which is why `@qubickit/core` focuses on typed Archive clients and watchers.
+- **Message types** – All cross-node communication uses numbered message types (e.g., type 3 `BroadcastTick`, type 24 `BroadcastTransaction`, type 36+ for asset registries, type 255 for admin commands). This tight mapping allows us to mirror each surface with schema-validated HTTP/Archive clients.
+- **Peers & transports** – Native nodes manage IPv4 peers (verified vs. unverified) and keep a `knownPublicPeers` list to bootstrap connections. If a peer misbehaves or fails to respond, the node demotes or removes it. QubicKit’s transports mimic this resilience through retries, failover, and circuit-breakers.
+- **Contracts** – Smart contracts are header-only C++ modules. Read-only **functions** are invoked through contract query endpoints, whereas state-changing **procedures** must be encoded into signed transactions. Contract indexes are stable and published in the node source, which is why QubicKit provides registries and helper codecs.
+- **Assets & telemetry** – Asset issuance/ownership logic feeds `/v1/assets/*` endpoints so dashboards can display IPOs, ownership, and possession changes. Logging endpoints (tick store hashes, pruning logs) reveal ledger health, so watchers need to understand `TryAgain` semantics during pruning.
+- **Crypto** – Identities derive from 55-character lowercase seeds hashed via KangarooTwelve, and transactions are signed with FourQ/SchnorrQ. QubicKit reimplements those primitives to guarantee parity.
+
+## Operational lifecycle
+
+1. **Bootstrapping peers** – operators seed a list of public peers, including their own IP, so the node can exchange peer lists and mark them verified.
+2. **Maintaining snapshots** – spectrum, universe, and contract files are rotated per epoch. Without the correct files, a node cannot join quorum.
+3. **Mining/computation** – computor nodes ingest seeds, submit solutions, and broadcast transactions. Balances, gamming keys, and nonces are all part of the broadcast payloads.
+4. **Observability** – logging endpoints expose store hashes, pruning ranges, and log digests. Operators monitor these to ensure they stay in sync.
+
+QubicKit packages bake these realities into their APIs—e.g., transaction helpers can attach network metadata, watchers can consume SSE or polling, and transports let you introspect peer health.
+
+## Why QubicKit?
+
+The node research highlights what the network expects:
+
+- Endpoints match native structs → generate schemas so we can validate and document them.
+- Peers require retries, circuit breakers, and diagnostics → ship a rich `HttpClient`.
+- Transactions need KangarooTwelve + SchnorrQ parity → provide identity + transaction builders.
+- Watchers must handle both polling and SSE streams → expose `TickWatcher` + `EventStreamClient`.
+
+QubicKit packages distill all of that into install-first libraries you can consume from any Bun/Node/React codebase without running the C++ stack.
+
+## Where to go next
+
+- [Install & set up QubicKit](/docs/getting-started) to pull in only the packages you need.
+- Dive into [Core capabilities](/docs/core/index) for transports, transactions, and observability.
+- Track the [SDK](/docs/sdk), [CLI](/docs/cli), and [Web](/docs/web) sections as those layers mature.

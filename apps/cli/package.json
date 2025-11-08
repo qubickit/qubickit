@@ -1,0 +1,17 @@
+{
+  "name": "@qubickit/cli",
+  "version": "0.0.0",
+  "type": "module",
+  "bin": {
+    "qubic": "./dist/index.js"
+  },
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "build": "echo \"TODO: bundle CLI\"",
+    "lint": "echo \"TODO: lint CLI\"",
+    "test": "echo \"TODO: CLI tests\""
+  },
+  "dependencies": {
+    "@qubickit/sdk": "workspace:*"
+  }
+}

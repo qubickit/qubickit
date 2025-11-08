@@ -1,0 +1,21 @@
+# Node/Bun installs
+node_modules/
+bun.lockb
+
+# Build artifacts
+packages/*/dist/
+apps/*/dist/
+apps/docs/.next/
+apps/docs/.qubickit-docs/
+dist/
+
+# Temporary / local tooling (consolidated under tmp/)
+tmp/
+tmp*/
+*.log
+.DS_Store
+coverage/
+planning/
+
+**/.env
+RELEASING.md

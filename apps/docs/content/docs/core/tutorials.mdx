@@ -1,0 +1,192 @@
+---
+title: Tutorials
+description: Step-by-step guides that show how to ship real workflows with `@qubickit/core`.
+icon: GraduationCap
+---
+
+## 1. Send a transfer from a Bun script
+
+This tutorial mirrors the flow in `packages/core/examples/send-transfer.ts`, but adds monitoring and error handling so you can drop it straight into automation.
+
+```ts
+import {
+  createQubicCore,
+  createTransactionDraft,
+  monitorTransactionStatus
+} from '@qubickit/core';
+
+const {
+  QUBIC_SOURCE_SEED,
+  QUBIC_DESTINATION_ID,
+  QUBIC_AMOUNT = '1',
+  QUBIC_HTTP_HOST = 'https://rpc.qubic.org'
+} = process.env;
+
+if (!QUBIC_SOURCE_SEED || !QUBIC_DESTINATION_ID) {
+  throw new Error('Set QUBIC_SOURCE_SEED and QUBIC_DESTINATION_ID env vars');
+}
+
+const core = createQubicCore({
+  hosts: { http: QUBIC_HTTP_HOST, archive: QUBIC_HTTP_HOST }
+});
+
+const latest = await core.archive.getLatestTick();
+const tickNumber = latest.tickData?.tickNumber ?? Math.floor(Date.now() / 1_000);
+
+const draft = await createTransactionDraft({
+  sourceSeed: QUBIC_SOURCE_SEED,
+  destinationId: QUBIC_DESTINATION_ID,
+  amount: BigInt(QUBIC_AMOUNT),
+  tickNumber
+});
+
+const broadcast = await core.http.broadcastTransaction(draft.encoded);
+
+if (!broadcast.transactionId) {
+  throw new Error('Broadcast response missing transactionId');
+}
+
+const status = await monitorTransactionStatus(core.archive, broadcast.transactionId, {
+  pollIntervalMs: 5_000,
+  timeoutMs: 120_000,
+  queryClient: core.query
+});
+
+console.log('moneyFlew?', status.moneyFlew, 'txId:', broadcast.transactionId);
+```
+
+Run it with:
+
+```bash
+QUBIC_SOURCE_SEED=... QUBIC_DESTINATION_ID=... bun run scripts/send-transfer.ts
+```
+
+## 2. Build a CLI command for balances
+
+You can build a simple Bun command that mirrors the planned `@qubickit/cli` behavior. This example uses `createHttpClient` directly so you can slot custom caches or diagnostics.
+
+```ts
+import { createHttpClient, HttpApiClient } from '@qubickit/core';
+
+const identity = process.argv[2];
+if (!identity) {
+  console.error('Usage: bun balance.ts <IDENTITY>');
+  process.exit(1);
+}
+
+const http = new HttpApiClient(
+  createHttpClient({
+    baseUrl: process.env.QUBIC_HTTP_HOST ?? 'https://rpc.qubic.org',
+    cache: undefined,
+    hooks: {
+      onRequest: ({ url }) => console.debug('[rpc]', url)
+    }
+  })
+);
+
+const balance = await http.getBalance(identity);
+console.table(balance.balance);
+```
+
+Enhancements to try:
+
+1. Add a `ResponseCache` so repeated lookups hit memory instead of the public RPC.
+2. Print `httpClient.getDiagnostics()` when the command exits to understand host health.
+
+## 3. Watch ticks via SSE with graceful fallback
+
+`TickWatcher` can consume polling or an SSE stream. This tutorial wires both so you seamlessly fall back to polling if the stream drops.
+
+```ts
+import { createQubicCore, EventStreamClient, TickWatcher } from '@qubickit/core';
+
+const core = createQubicCore();
+const events = new EventStreamClient(process.env.QUBIC_ARCHIVE_SSE ?? 'https://rpc.qubic.org', {
+  reconnect: true,
+  retryDelayMs: 2_000
+});
+
+const watcher = new TickWatcher(core.archive, {
+  intervalMs: 10_000,
+  eventStream: {
+    createSubscription: () => events.subscribe('/v1/ticks/stream'),
+    parseEvent: (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        return payload.tickNumber ?? payload;
+      } catch {
+        return undefined;
+      }
+    }
+  }
+});
+
+watcher.onTick(async (tick) => {
+  const data = await core.archive.getTickData(tick);
+  console.log('tick', tick, 'tx count', data.tickData?.transactions?.length ?? 0);
+});
+
+watcher.start();
+```
+
+## 4. Cache-heavy data ingestion job
+
+Ingesting the archive or stats endpoints repeatedly benefits from Redis-backed caching, especially when you deploy multiple workers. The snippet below shares a cache across instances so only one worker hits the RPC for hot keys.
+
+```ts
+import { createHttpClient, RedisCacheAdapter } from '@qubickit/core';
+import Redis from 'ioredis';
+
+const redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379');
+const cache = new RedisCacheAdapter(redis, {
+  keyPrefix: 'qubickit:archive',
+  ttlSeconds: 60
+});
+
+const archiveClient = createHttpClient({
+  baseUrl: process.env.QUBIC_ARCHIVE_HOST ?? 'https://rpc.qubic.org',
+  cache
+});
+
+const ticks = await Promise.all(
+  Array.from({ length: 5 }, (_, offset) => archiveClient.request({
+    path: `/v1/ticks/${Number(process.env.START_TICK ?? '0') + offset}/tick-data`,
+    useCache: true
+  }))
+);
+
+console.log('Fetched ticks with shared cache', ticks.length);
+await redis.quit();
+```
+
+## 5. Monitor transaction settlement and trigger webhooks
+
+Hook `monitorTransactionStatus` into your job queue or webhook system so downstream tools receive alerts when money actually moves.
+
+```ts
+import { createQubicCore, monitorTransactionStatus } from '@qubickit/core';
+import fetch from 'node-fetch';
+
+const core = createQubicCore();
+
+export async function waitForSettlement(transactionId: string) {
+  const status = await monitorTransactionStatus(core.archive, transactionId, {
+    pollIntervalMs: 3_000,
+    timeoutMs: 180_000,
+    queryClient: core.query
+  });
+
+  if (status.moneyFlew) {
+    await fetch(process.env.WEBHOOK_URL!, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ transactionId, settledAt: Date.now() })
+    });
+  }
+}
+```
+
+## Next steps
+
+- Pair these tutorials with the [Transports & clients](/docs/core/clients) reference to customize retries, caches, and diagnostics per environment.
+- Keep adding scripts to your project (not this repo) so you can upgrade the packages via npm while the docs guide you through more advanced use cases.

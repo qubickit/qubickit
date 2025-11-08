@@ -1,0 +1,155 @@
+---
+title: Use cases
+description: Practical scenarios that show how `@qubickit/core` fits into larger systems.
+icon: Workflow
+---
+
+## Observability dashboard
+
+**Goal:** display peer health, circuit-breaker status, and recent request failures inside an internal dashboard.
+
+```ts
+import { createQubicCore } from '@qubickit/core';
+
+const core = createQubicCore({
+  timeoutMs: 6_000,
+  hooks: {
+    onResponse: ({ url, response }) => console.debug(`[${response.status}]`, url)
+  }
+});
+
+export function getTransportDiagnostics() {
+  const transports = core.transports;
+  return {
+    http: transports.http.getDiagnostics(),
+    archive: transports.archive.getDiagnostics(),
+    stats: transports.stats.getDiagnostics(),
+    query: transports.query.getDiagnostics()
+  };
+}
+```
+
+Feed `getTransportDiagnostics()` into your telemetry pipeline (Grafana, Datadog, etc.) and alert when `circuitOpen` stays true longer than your tolerance.
+
+## Server-side cache warmer
+
+**Goal:** keep hot endpoints cached before CLI users or dashboards request them.
+
+```ts
+import { createHttpClient, ResponseCache } from '@qubickit/core';
+
+const cache = new ResponseCache(30_000);
+const archive = createHttpClient({
+  baseUrl: 'https://rpc.qubic.org',
+  cache
+});
+
+export async function warmTickRange(start: number, end: number) {
+  const jobs = [];
+  for (let tick = start; tick <= end; tick += 1) {
+    jobs.push(
+      archive.request({
+        path: `/v1/ticks/${tick}/tick-data`,
+        cacheKey: `tick:${tick}`,
+        useCache: true
+      })
+    );
+  }
+
+  await Promise.all(jobs);
+  console.log(`Warmed ${jobs.length} ticks`);
+}
+```
+
+Deploy the warmer as a cron job or background worker so downstream apps hit the cache and enjoy lower latency.
+
+## Hybrid data pipeline (Archive + Query service)
+
+**Goal:** build a data-export pipeline that fetches detailed tick data from the archive and enriches it with paginated history from the query service.
+
+```ts
+import { createQubicCore } from '@qubickit/core';
+
+const core = createQubicCore();
+
+export async function exportRecentTransfers(identity: string, limit = 500) {
+  const transfers = await core.query.getTransfersByIdentity(identity, {
+    pageSize: 100,
+    autoPaginate: true
+  });
+
+  const ticks = await Promise.all(
+    transfers
+      .slice(0, limit)
+      .map((transfer) => core.archive.getTickData(transfer.tick ?? 0))
+  );
+
+  return transfers.map((transfer, idx) => ({
+    ...transfer,
+    tickMetadata: ticks[idx]?.tickData
+  }));
+}
+```
+
+Use this pattern when you need historical data plus the richer metadata only the archive exposes.
+
+## Contract debugging harness
+
+**Goal:** query a contract function repeatedly with different payloads and compare responses.
+
+```ts
+import { createQubicCore } from '@qubickit/core';
+
+const { http } = createQubicCore();
+
+export async function debugContract(contractIndex: number, payloads: string[]) {
+  return Promise.all(
+    payloads.map(async (payload) => {
+      const response = await http.querySmartContract({
+        contractIndex,
+        inputType: 0,
+        requestData: payload
+      });
+
+      return { payload, responseData: response.responseData };
+    })
+  );
+}
+```
+
+Pair this with `serializeVarStruct`/custom codecs to experiment with function inputs without redeploying contracts.
+
+## Streaming alerts for new ticks
+
+**Goal:** trigger downstream systems whenever a new tick is published, but avoid missing events during outages.
+
+```ts
+import { createQubicCore, EventStreamClient, TickWatcher } from '@qubickit/core';
+
+const core = createQubicCore();
+const events = new EventStreamClient('https://rpc.qubic.org', { reconnect: true });
+
+const watcher = new TickWatcher(core.archive, {
+  intervalMs: 5_000,
+  eventStream: {
+    createSubscription: () => events.subscribe('/v1/ticks/stream'),
+  }
+});
+
+export function startAlerting(callback: (tick: number) => Promise<void>) {
+  watcher.onTick((tick) => {
+    callback(tick).catch((error) => {
+      console.error('Alert callback failed', error);
+    });
+  });
+
+  watcher.start();
+}
+```
+
+Send the callbacks to Slack, PagerDuty, or any internal queue to keep operators informed.
+
+## Where to go next
+
+- Combine these use cases with the [Tutorials](/docs/core/tutorials) page for full, copy-pasteable scripts.
+- When you outgrow the direct core APIs, the upcoming SDK/CLI layers will build on the same primitives so you do not have to rewrite code.

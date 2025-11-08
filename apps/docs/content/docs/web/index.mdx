@@ -1,0 +1,19 @@
+---
+title: "@qubickit/web"
+description: The `@qubickit/web` package will host shared React hooks and components once the SDK stabilizes.
+icon: Globe
+---
+
+`@qubickit/web` depends on the SDK (`package.json` already references it via `workspace:*`). The package is still a placeholder, but the intent is clear:
+
+- **Hooks** – React hooks (`useTickWatcher`, `useBalance`, `useTransfers`) that wrap the SDK watchers and automatically manage subscriptions/cleanup.
+- **Components** – reusable UI elements (charts, tables, status widgets) that visualize archive/query data without rewriting plumbing in every dashboard.
+- **Routing/layout glue** – conventions for embedding docs examples, CLI output, or watcher feeds into web apps backed by modern frameworks.
+
+As the SDK matures, this page will document:
+
+1. Installation (`bun add @qubickit/web`).
+2. Theme guidance and Tailwind/css-in-js integration.
+3. Examples that show CLI + SDK + Web working together (e.g., run a CLI command that triggers a watcher update in the browser via SSE).
+
+For now, keep an eye on `packages/web` (where we will wire `tsup`, linting, and tests) and the SDK roadmap to understand when these docs will expand.

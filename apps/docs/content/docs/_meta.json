@@ -1,0 +1,17 @@
+{
+  "root": true,
+  "title": "QubicKit Docs",
+  "icon": "BookOpenCheck",
+  "description": "Guides and references for the QubicKit packages.",
+  "pages": [
+    "what-is-qubic",
+    "index",
+    "getting-started",
+    "showcase",
+    "---Packages---",
+    "...core",
+    "...sdk",
+    "...cli",
+    "...web"
+  ]
+}

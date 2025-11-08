@@ -1,0 +1,8 @@
+{
+  "title": "@qubickit/sdk",
+  "icon": "Layers",
+  "description": "Wallet + session orchestration built on the core transports.",
+  "pages": [
+    "index"
+  ]
+}

@@ -1,0 +1,152 @@
+---
+title: Transactions & contracts
+description: Build, sign, encode, broadcast, and monitor Qubic transactions with `@qubickit/core`.
+icon: ArrowRightLeft
+---
+
+import { Step, Steps } from 'fumadocs-ui/components/steps';
+
+Transactions in Qubic are 144-byte records that include the source/destination public keys, amount, tick metadata, payload, and a SchnorrQ signature. The core library exposes helpers so you only need to provide business inputs (seed, destination, amount, payload) while it handles normalization, serialization, and signing.
+
+## Lifecycle
+
+<Steps>
+  <Step>
+    <strong>Collect network metadata</strong> – fetch the latest tick number plus the optional `timeLock`/`varStruct` blobs from the archive or HTTP surfaces.
+  </Step>
+  <Step>
+    <strong>Draft & sign</strong> – call `createTransactionDraft` (or the lower-level `buildUnsignedTransaction` + `signTransaction`) to derive the sender’s keys, shape the payload, and produce the signed bytes.
+  </Step>
+  <Step>
+    <strong>Broadcast</strong> – send the base64-encoded payload with `HttpApiClient#broadcastTransaction` (or the `broadcastEncodedTransaction` helper).
+  </Step>
+  <Step>
+    <strong>Monitor settlement</strong> – poll `ArchiveClient#getTransactionStatus` and optionally fall back to the query service with `monitorTransactionStatus`.
+  </Step>
+</Steps>
+
+The types involved:
+
+| Type | Purpose |
+| --- | --- |
+| `TransactionDraft` | User inputs (seed, destinationId, amount, optional payload metadata). |
+| `NetworkMetadata` | Tick/timeLock/varStruct data fetched from the network. |
+| `SignedTransaction` | Output of `createTransactionDraft` (`txId`, `encoded`, `bytes`, `unsignedBytes`). |
+
+## Draft and sign a transfer
+
+```ts
+import {
+  createQubicCore,
+  createTransactionDraft,
+  attachNetworkMetadata,
+  monitorTransactionStatus
+} from '@qubickit/core';
+
+const core = createQubicCore();
+const latestTick = await core.archive.getLatestTick();
+const nextTick = latestTick.tickData?.tickNumber ?? Math.floor(Date.now() / 1_000);
+const { tickData } = await core.archive.getTickData(nextTick);
+
+const draft = await createTransactionDraft({
+  sourceSeed: process.env.QUBIC_SOURCE_SEED!,
+  destinationId: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+  amount: 25_000_000,
+  tickNumber: tickData?.tickNumber,
+  inputType: 0
+});
+
+const broadcast = await core.http.broadcastTransaction(draft.encoded);
+if (broadcast.transactionId) {
+  await monitorTransactionStatus(core.archive, broadcast.transactionId, {
+    pollIntervalMs: 5_000,
+    timeoutMs: 120_000,
+    queryClient: core.query
+  });
+}
+```
+
+- `sourceSeed` must be 55 lowercase letters (see [Identity helpers](/docs/core/utilities)).
+- `destinationId` must be a 60-character uppercase identity.
+- `amount` accepts `string | number | bigint` and is normalized to the on-chain integer format with `normalizeAmount`.
+- `tickNumber` is required unless you call `attachNetworkMetadata(draft, metadata)` to fill it using recent network data.
+
+:::warning
+Ticks expire quickly. Fetch tick/timeLock/varStruct immediately before signing and broadcasting, or use watchers/SSE feeds to react in real time.
+:::
+
+## Attach network metadata
+
+Some flows need the `timeLock` or `varStruct` bytes exposed by the archive APIs. Use `attachNetworkMetadata` to merge those network-derived blobs into your draft before signing:
+
+```ts
+import {
+  attachNetworkMetadata,
+  serializeTimeLock,
+  serializeVarStruct
+} from '@qubickit/core';
+
+const metadata = {
+  tickNumber: latest.tickData?.tickNumber ?? 0,
+  timeLock: serializeTimeLock({ tick: latest.tickData?.tickNumber ?? 0, waitTicks: 4 }),
+  varStruct: serializeVarStruct(Buffer.from('feedface', 'hex'))
+};
+
+const prepared = attachNetworkMetadata(draft, metadata);
+```
+
+If you need finer control, you can call `buildUnsignedTransaction` to create the unsigned bytes and `signTransaction` to append the SchnorrQ signature yourself. `encodeSignedTransaction` turns the bytes into the base64 payload (`encoded`) plus the unsigned `txId`.
+
+### Time-lock & varStruct helpers
+
+`@qubickit/core` exports serializer/deserializer pairs so you can inspect or craft the metadata that accompanies certain transactions:
+
+| Helper | Description |
+| --- | --- |
+| `serializeTimeLock({ tick, waitTicks })` / `deserializeTimeLock(buffer)` | Packs/unpacks the time-lock structure enforced by the node when you want to delay execution. |
+| `serializeVarStruct(payload: Uint8Array)` / `deserializeVarStruct(buffer)` | Packs arbitrary varStruct bytes that mirror what the native node expects in tick data. |
+
+These helpers keep your code in sync with the ledger encoding rules and make it easy to store/replay metadata across services.
+
+## Broadcast & monitor the easy way
+
+`broadcastEncodedTransaction` bundles the HTTP broadcast and optional monitoring loop into a single helper:
+
+```ts
+import { broadcastEncodedTransaction } from '@qubickit/core';
+
+const result = await broadcastEncodedTransaction(core.http, core.archive, draft.encoded, {
+  monitor: true,
+  pollIntervalMs: 5_000,
+  timeoutMs: 120_000,
+  queryClient: core.query
+});
+
+console.log(result.transactionId, result.status?.moneyFlew);
+```
+
+Pass `monitor: false` (the default) if you only need the HTTP response and plan to check settlement elsewhere.
+
+`monitorTransactionStatus` polls `archive.getTransactionStatus(txId)` with exponential backoff/jitter and (optionally) uses `QueryServiceClient#getTransactionByHash` as a fallback. It throws after the timeout window so callers can trigger alerts or retries.
+
+## Contract payloads & read-only operations
+
+- **Read-only contract calls**: Use `HttpApiClient#querySmartContract`, which POSTs to `/v1/querySmartContract`. You provide `contractIndex`, optional `inputType/inputSize`, and the hex/base64 payload; the method returns `{ responseData?: string }`.
+- **Helper shortcut**: The exported `querySmartContract(httpClient, { contractIndex, inputType, payload })` function wraps the HTTP client and handles base64 encoding plus `inputSize` for you.
+- **Contract procedures (writes)**: Build them like any other transaction. Encode the payload with your contract-specific codec, pass it as `input` on the `TransactionDraft`, and broadcast/monitor as shown above.
+
+When the registry ingestion tooling (Phase 2) lands, the SDK will expose higher-level helpers for contract encoding. Until then, keeping the transaction builder logic inside `@qubickit/core` makes it easy to reuse from scripts, CLIs, or services.
+
+## Useful commands
+
+`packages/core` exposes Bun scripts to help with transaction-heavy development:
+
+| Command | Description |
+| --- | --- |
+| `bun run --cwd packages/core dev` | Runs `tsup` in watch mode so changes propagate quickly to your app. |
+| `bun run --cwd packages/core build` | Builds the ESM + CJS bundles plus type declarations. |
+| `bun run --cwd packages/core test` | Executes Bun tests (useful for validating crypto helpers with vectors). |
+| `bun run --cwd packages/core schemas:download` | Pulls the latest Swagger specs into `schemas/raw`. |
+| `bun run --cwd packages/core schemas:generate` | Regenerates the TypeScript + Zod models consumed by the clients. |
+
+These scripts are safe to run from CI or your local shell and ensure the docs examples stay truthful over time.
