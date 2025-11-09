@@ -1,0 +1,95 @@
+---
+title: "Getting started"
+description: "Install @qubickit/sdk, wire it to @qubickit/core, and fetch your first balances."
+icon: Play
+cta:
+  label: "Install SDK"
+  href: "https://www.npmjs.com/package/@qubickit/sdk"
+---
+
+## Install
+
+```bash
+bun add @qubickit/core @qubickit/sdk
+# or: npm install @qubickit/core @qubickit/sdk
+```
+
+The SDK expects the core package to be available at runtime. Use the same version range in every workspace to keep the transports aligned.
+
+## Create an SDK instance
+
+```ts
+import { createQubicSdk } from '@qubickit/sdk';
+
+const sdk = createQubicSdk({
+  defaultHeaders: { 'x-app': 'docs-example' }
+});
+```
+
+`createQubicSdk` immediately spins up the shared HTTP clients, transport hooks, wallet manager, and watcher helpers—you do not need to manually import anything from `@qubickit/core`.
+
+## Fetch balances and ticks
+
+```ts
+const identity = 'BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID';
+
+const balance = await sdk.core.http.getBalance(identity);
+const latestTick = await sdk.core.archive.getLatestTick();
+
+console.log(balance.balance?.amount);
+console.log(latestTick.latestTick);
+```
+
+If you prefer a higher-level experience, use the `SessionClient` so caching and fallbacks are handled automatically:
+
+```ts
+const session = sdk.createSessionClient();
+const { transactions } = await session.listTransactions(identity, { limit: 25 });
+```
+
+## Watch ticks, balances, transfers
+
+```ts
+const tickHandle = sdk.watchers.ticks();
+tickHandle.channel.subscribe((tick) => console.log('tick', tick));
+
+const balanceHandle = sdk.watchers.balance(identity, { intervalMs: 1500 });
+balanceHandle.channel.subscribe(({ balance }) => console.log('balance', balance?.amount));
+
+const transferHandle = sdk.watchers.transfers(identity, { intervalMs: 2500 });
+transferHandle.channel.subscribe(({ transaction }) => console.log('tx', transaction.hash));
+```
+
+Each handle implements `.stop()` to tear down timers when you leave the page/CLI command.
+
+## Customize adapters
+
+`createQubicSdk` accepts the same adapters that power the core package, so you can swap storage/cache implementations per environment:
+
+```ts
+import { createMemoryStorageAdapter } from '@qubickit/sdk';
+
+const sdk = createQubicSdk({
+  storage: createMemoryStorageAdapter({
+    schema: WalletProfileSchema,
+    namespace: 'demo-profiles'
+  }),
+  cache: createMemoryCacheAdapter({
+    schema: cacheSchema,
+    defaultTtlMs: 5_000
+  })
+});
+```
+
+- **Storage adapters**: file-based persistence for CLI, IndexedDB for browsers, or the in-memory default for tests.
+- **Cache adapters**: memory, file, Redis, or anything that implements the `CacheAdapter<T>` interface from `src/adapters`.
+
+You can also pass `transportHooks`, `logger`, `metrics`, and `sync` options up front to enable telemetry from day one.
+
+## Use cases
+
+- **CLI hot wallets** – use the file storage adapter + multi-wallet limits to protect operator budgets.
+- **Browser dashboards** – pair IndexedDB storage with the sync daemon to keep balances/ticks warm in the background.
+- **Servers/workers** – run the transfer queue + command processor in your worker pool, enqueueing failed jobs for retry.
+
+Each use case only swaps adapters/hooks; the core SDK API stays consistent everywhere.

@@ -1,9 +1,16 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "src",
+    "rootDir": "../..",
     "outDir": "dist",
     "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@qubickit/sdk": ["../../packages/sdk/src/index.ts"],
+      "@qubickit/sdk/*": ["../../packages/sdk/src/*"],
+      "@qubickit/core": ["../../packages/core/src/index.ts"],
+      "@qubickit/core/*": ["../../packages/core/src/*"]
+    }
   },
   "include": ["src"]
 }

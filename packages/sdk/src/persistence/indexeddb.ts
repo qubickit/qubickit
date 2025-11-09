@@ -37,7 +37,7 @@ type IDBObjectStoreLike = {
 };
 
 type IDBRequestLike = {
-  result: any;
+  result: unknown;
   onerror: (() => void) | null;
   onsuccess: (() => void) | null;
   error?: unknown;

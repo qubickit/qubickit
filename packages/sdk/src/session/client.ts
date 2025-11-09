@@ -4,9 +4,22 @@ import type { QubicSdk } from '../sdk';
 import { createMemoryCacheAdapter, type CacheAdapter } from '../adapters';
 import { runWithTransportHooks } from '../transport/hooks';
 import { WalletManager, type WalletSessionHandle } from '../wallet';
+import { createBalanceWatcher, type BalanceWatchHandle, type BalanceWatcherOptions } from '../watchers/balances';
+import { createContractWatcher, type ContractWatchHandle, type ContractWatcherOptions } from '../watchers/contracts';
 import { createTransferWatcher, type TransferWatchHandle, type TransferWatcherOptions } from '../watchers/transfers';
 
 const cacheSchema = z.unknown();
+
+type QueryTransactionsOptions = NonNullable<
+  Parameters<QubicSdk['core']['query']['getTransactionsForIdentity']>[1]
+>;
+type HttpBalanceResponse = Awaited<ReturnType<QubicSdk['core']['http']['getBalance']>>;
+type HttpBalanceFn = (
+  identity: string,
+  options?: {
+    useCache?: boolean;
+  }
+) => Promise<HttpBalanceResponse>;
 
 export type SessionSource = 'query' | 'archive';
 
@@ -89,7 +102,7 @@ export class SessionClient {
     if (cached) {
       return cached;
     }
-    const queryOptions: Record<string, number> = {};
+    const queryOptions: QueryTransactionsOptions = {};
     if (typeof options.limit === 'number') {
       queryOptions.limit = options.limit;
     }
@@ -99,7 +112,7 @@ export class SessionClient {
 
     const result = (await runWithTransportHooks(
       this.sdk.hooks,
-      () => this.sdk.core.query.getTransactionsForIdentity(identity, queryOptions as any),
+      () => this.sdk.core.query.getTransactionsForIdentity(identity, queryOptions),
       {
         method: 'query.getTransactionsForIdentity',
         params: { identity, options: queryOptions }
@@ -135,10 +148,15 @@ export class SessionClient {
     if (cached) {
       return cached;
     }
-    const result = await runWithTransportHooks(this.sdk.hooks, () => this.sdk.core.http.getBalance(identity), {
-      method: 'http.getBalance',
-      params: { identity }
-    });
+    const httpGetBalance = this.sdk.core.http.getBalance.bind(this.sdk.core.http) as HttpBalanceFn;
+    const result = await runWithTransportHooks(
+      this.sdk.hooks,
+      () => httpGetBalance(identity, { useCache: false }),
+      {
+        method: 'http.getBalance',
+        params: { identity }
+      }
+    );
     await this.cache.set(cacheKey, result, options?.cacheTtlMs ?? this.defaultCacheTtlMs);
     return result;
   }
@@ -157,6 +175,17 @@ export class SessionClient {
 
   watchTransfers(identity: string, options: Omit<TransferWatcherOptions, 'identity'> = {}): TransferWatchHandle {
     return createTransferWatcher(this, { identity, ...options });
+  }
+
+  watchBalance(identity: string, options: Omit<BalanceWatcherOptions, 'identity'> = {}): BalanceWatchHandle {
+    return createBalanceWatcher(this.sdk, { identity, ...options });
+  }
+
+  watchContract(
+    contractIdentity: string,
+    options: Omit<ContractWatcherOptions, 'contractIdentity'> = {}
+  ): ContractWatchHandle {
+    return createContractWatcher(this, { contractIdentity, ...options });
   }
 
   private async callSource(

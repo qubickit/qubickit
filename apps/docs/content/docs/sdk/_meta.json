@@ -3,6 +3,15 @@
   "icon": "Layers",
   "description": "Wallet + session orchestration built on the core transports.",
   "pages": [
-    "index"
+    "index",
+    "getting-started",
+    "wallets",
+    "transfers-contracts",
+    "telemetry-sync",
+    "watchers",
+    "contracts",
+    "adapters",
+    "errors",
+    "examples"
   ]
 }

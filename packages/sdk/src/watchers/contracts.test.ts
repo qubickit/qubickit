@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createContractWatcher } from './contracts';
-import type { SessionClient } from '../session';
+import type { SessionClient, TransactionsForIdentityResponse } from '../session';
 
 describe('createContractWatcher', () => {
   it('emits contract events for matching transactions', async () => {
@@ -13,8 +13,8 @@ describe('createContractWatcher', () => {
           { hash: 'skip', destination: 'OTHER' },
           { hash: 'match', destination: 'CONTRACT' }
         ]
-      } as any)
-      .mockResolvedValue({ transactions: [] } as any);
+      } as TransactionsForIdentityResponse)
+      .mockResolvedValue({ transactions: [] } as TransactionsForIdentityResponse);
 
     const session = { listTransactions } as unknown as SessionClient;
     const watcher = createContractWatcher(session, {

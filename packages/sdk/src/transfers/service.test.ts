@@ -1,11 +1,34 @@
 import { describe, expect, it, vi } from 'vitest';
+import { broadcastEncodedTransaction } from '@qubickit/core';
 
 import type { QubicSdk } from '../sdk';
 import { createTransportHooksRegistry } from '../transport/hooks';
 import { TransferService } from './service';
+import { z } from 'zod';
+import { createMemoryCacheAdapter, createMemoryStorageAdapter } from '../adapters';
+
+vi.mock('@qubickit/core', () => ({
+  broadcastEncodedTransaction: vi.fn(async () => ({ transactionId: 'mock-tx', status: { moneyFlew: true } })),
+  buildUnsignedTransaction: vi.fn(() => new Uint8Array([0])),
+  encodeSignedTransaction: vi.fn(() => ({ txId: 'mock-tx', encoded: 'encoded' })),
+  signTransaction: vi.fn(async () => ({ signedBytes: new Uint8Array([1]) })),
+  normalizeAmount: vi.fn(() => '1'),
+  identityToPublicKey: vi.fn(() => new Uint8Array(32)),
+  createIdentityPackage: vi.fn(async (_seed: string, index: number = 0) => ({
+    privateKey: new Uint8Array(32).fill(index),
+    publicKey: new Uint8Array(32).fill(index),
+    publicKeyWithChecksum: new Uint8Array(36).fill(index),
+    identity: `IDENTITY-${index}`
+  }))
+}));
 
 const seed = 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyabcd';
 const destination = 'BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID';
+
+const adapters = {
+  storage: createMemoryStorageAdapter({ schema: z.unknown() }),
+  cache: createMemoryCacheAdapter({ schema: z.unknown() })
+};
 
 const createSdk = () =>
   ({
@@ -29,7 +52,7 @@ const createSdk = () =>
         }
       }
     },
-    adapters: { storage: {} as any, cache: {} as any },
+    adapters,
     hooks: createTransportHooksRegistry(),
     wallet: {
       resumeSession: vi.fn()
@@ -60,6 +83,6 @@ describe('TransferService', () => {
       monitor: true
     });
     expect(result.status).toBe('settled');
-    expect(sdk.core.http.broadcastTransaction).toHaveBeenCalled();
+    expect(broadcastEncodedTransaction).toHaveBeenCalled();
   });
 });

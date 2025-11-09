@@ -27,7 +27,7 @@ export {
   serializeVarStruct,
   deserializeVarStruct
 } from './serde/metadata';
-export { createIdentityPackage } from './wallet/identity';
+export { createIdentityPackage, publicKeyToIdentity, identityToPublicKey } from './wallet/identity';
 export { monitorTransactionStatus } from './transactions/monitor';
 export { broadcastEncodedTransaction } from './transactions/broadcast';
 export { querySmartContract } from './contracts/query';

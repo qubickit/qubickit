@@ -1,23 +1,45 @@
 ---
 title: "@qubickit/cli"
-description: How the upcoming Qubic CLI will reuse the core transports for diagnostics and automation.
+description: "Commander-powered CLI that wraps the SDK for transports, wallets, transfers, and contract workflows."
 icon: Terminal
 ---
 
-The CLI (`apps/cli`) is a Bun-based application that imports `@qubickit/core` so every command shares the same transports, cache adapters, and diagnostics you see throughout these docs.
+The CLI (`apps/cli`) is a Bun-based application that imports `@qubickit/sdk` + `@qubickit/core` so every command shares the same transports, cache adapters, and diagnostics documented elsewhere. It is built with `commander`, ships a shebang via `tsup`, and exposes both `qubic` **and** `qk` binaries when you install it globally.
 
-## Current focus
+## Install & entry points
 
-- **Transport telemetry** – commands like `qubic transport:inspect` will surface `HttpClient#getDiagnostics()`, showing which hosts are healthy, which circuits are open, and what the recent request history looks like. See `apps/cli/README.md` for a code sample today.
-- **Distributed caching** – the CLI will ship helpers for wiring a `RedisCacheAdapter` (or any custom `CacheAdapter`) so multiple CLI sessions reuse the same cached responses instead of hammering public nodes.
+```bash
+# per-project usage (package.json scripts)
+bun add @qubickit/cli
 
-## Planned commands
+# global install with dual shortcuts
+bun add -g @qubickit/cli
+qubic --help
+qk --help            # identical entry point
+```
 
-| Command | Purpose |
+Every command accepts the shared `QUBIC_*` host overrides (`QUBIC_HTTP_HOST`, `QUBIC_ARCHIVE_HOST`, etc.) and reads/writes encrypted wallet profiles to `~/.qubickit/wallets.json` by default (configurable via `QUBIC_WALLET_STORE`).
+
+## Available command groups
+
+| Group | Highlights |
 | --- | --- |
-| `qubic balance <identity>` | Calls `HttpApiClient#getBalance` and prints available/pending balances with formatting helpers from core. |
-| `qubic tx broadcast <file>` | Reads an encoded transaction, broadcasts it, and optionally monitors settlement via `monitorTransactionStatus`. |
-| `qubic transport:inspect` | Dumps diagnostics (`hosts`, `failureCount`, request history) to stdout or JSON for automation. |
-| `qubic assets list` | Wraps the HTTP asset endpoints for quick lookups. |
+| `transport:*` | `transport:inspect` probes `/v1/status`, prints host health, failure counts, and recent request history pulled from `HttpClient#getDiagnostics()`. |
+| `watch:*` | `watch:ticks`, `watch:balance`, `watch:transfers`, and `watch:contracts` wrap SDK watchers and stream data as NDJSON (with `--json`) or pretty-printed objects. |
+| `wallet:*` | `wallet:profiles:create/list/remove`, `wallet:accounts:add`, and `wallet:sessions:*` manage AES-encrypted profiles stored via the SDK’s file adapter. |
+| `transfer:*` | `transfer:send` signs/broadcasts transfers using seeds, session tokens, or live wallet profiles, while `transfer:queue:resume` drains the persistence-backed queue. |
+| `contracts:*` | `contracts:list` surfaces the static registry, `contracts:call` runs read-only functions, and `contracts:invoke` delegates to the SDK’s `ContractService` + transfer pipeline. |
 
-As the CLI takes shape, this section will expand with installation instructions, global flags (hosts, cache config, verbosity), and examples that dovetail with the SDK and Web packages.
+## Commander ergonomics
+
+- Shared options (e.g., `--json`, host overrides, signer selection) are modeled via Commander’s `.option()` helpers, so `--help` output stays accurate.
+- Commands parse numeric flags with `zod`/utility functions to keep validation consistent with the SDK schemas.
+- The CLI context bootstraps a real `createQubicSdk()` instance using the same storage/cache adapters described in [SDK adapters](/docs/sdk/adapters), which means every command benefits from telemetry hooks, persistence, and watcher orchestration.
+
+## Roadmap
+
+- **Config commands** – `qk config get/set` to manage host + wallet paths without editing JSON manually.
+- **Assets & stats** – helpers around `HttpApiClient#getAssetIssuances`/`StatsClient#getLatestStats`.
+- **Automation recipes** – higher-level commands that combine watchers + transfers (e.g., treasury drains, approval flows) documented alongside the SDK tutorials.
+
+Track progress in `apps/cli/README.md` and the repository changelog; each release will be tagged so you can pin CLI behavior per environment.

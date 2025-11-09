@@ -1,0 +1,107 @@
+---
+title: "Transfers & Contracts"
+description: "Use the transfer pipeline and contract registry to orchestrate Qubic workflows."
+icon: Send
+cta:
+  label: "See Transfer API"
+  href: "#transferservice"
+---
+
+## TransferService
+
+`sdk.transfers.send()` covers draft → sign → broadcast → monitor, with telemetry callbacks and automatic retries.
+
+```ts
+const result = await sdk.transfers.send(
+  {
+    destination: 'BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID',
+    amount: '1',
+    signer: { sessionToken: session.token },
+    monitor: true
+  },
+  {
+    telemetry: {
+      onDraft: ({ txId }) => console.info('drafted', txId),
+      onSettled: ({ txId }) => console.info('settled', txId)
+    }
+  }
+);
+```
+
+- `dryRun` lets you preview the unsigned transaction bytes.
+- Failed broadcasts are enqueued automatically; call `sdk.transfers.getQueue().nextPending()` or `resumePending()` when your worker comes back online.
+
+### Transfer API reference
+
+<auto-type-table path="../../../../../packages/sdk/src/transfers/service.ts" name="TransferRequest" />
+
+<auto-type-table path="../../../../../packages/sdk/src/transfers/service.ts" name="TransferSendOptions" />
+
+<auto-type-table path="../../../../../packages/sdk/src/transfers/service.ts" name="TransferTelemetry" />
+
+<auto-type-table path="../../../../../packages/sdk/src/transfers/service.ts" name="TransferResult" />
+
+## Contract registry & service
+
+Metadata is generated from `static/registry/smart_contracts.json` and validated via Zod. Lookups support contract index, address, or label.
+
+```ts
+const read = await sdk.contracts.service.call({
+  contract: 'QX',
+  functionName: 'Fees'
+});
+
+await sdk.contracts.service.invoke({
+  contract: 'QX',
+  procedureName: 'IssueAsset',
+  signer: { sessionToken: session.token },
+  amount: '0'
+});
+```
+
+The contract generator parses the upstream `REGISTER_USER_FUNCTION/PROCEDURE` macros, so `functionName`/`procedureName` stay type-safe as new contracts roll out. `invoke` still delegates to the transfer pipeline, meaning telemetry and persistence adapters see the same envelopes.
+
+```ts
+import type { GeneratedStructMap } from '@qubickit/sdk/contracts';
+
+type FeesInput = GeneratedStructMap['QX_Fees_input'];
+
+const input: FeesInput = {
+  // strongly typed fields from the contract header
+};
+```
+
+Use the generated types while building payload encoders so you never forget a required field (you still need to serialize to `Uint8Array` before passing `payload` or `input` into the SDK).
+
+### Contract API reference
+
+<auto-type-table path="../../../../../packages/sdk/src/contracts/service.ts" name="ContractCallOptions" />
+
+<auto-type-table path="../../../../../packages/sdk/src/contracts/service.ts" name="ContractInvokeOptions" />
+
+## Use cases
+
+- **CLI orchestrations** – stream contract events via `sdk.watchers.contracts` and issue follow-up calls through the transfer queue.
+- **Market makers** – keep order books fresh by polling `sdk.contracts.service.call()` with typed payloads.
+- **Treasuries** – cap spending via `multiWallet`, enqueue large transfers for approval, and rely on the queue to resume after outages.
+
+## Persistence adapters & command queue
+
+Phase 2 introduced multiple persistence backends—`createMemoryPersistenceAdapter`, `createFilePersistenceAdapter`, `createIndexedDbPersistenceAdapter`, and `createSecurePersistenceAdapter`. Combine them with `CommandQueue` to store failed jobs in whatever environment you target (CLI, server, web, mobile).
+
+### Command queue walkthrough
+
+```ts
+const queue = sdk.transfers.getQueue();
+const pending = await queue.nextPending();
+if (pending) {
+  try {
+    await sdk.transfers.send(pending.payload, { queueOnFail: false });
+    await queue.complete(pending.id);
+  } catch (error) {
+    await queue.fail(pending.id, error);
+  }
+}
+```
+
+Queues are persistence-backed, so you can resume failed broadcasts after a crash or when network connectivity returns. Pair the queue with the sync daemon to keep the job list fresh.

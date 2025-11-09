@@ -58,6 +58,12 @@ try {
 
 `RequestOptions` accepts `path`, `method`, `query`, `headers`, `body`, `signal`, plus cache controls (`cacheKey`, `useCache`). Responses are parsed as JSON when possible, otherwise returned as strings.
 
+### Type reference
+
+<auto-type-table path="../../../../../packages/core/src/transport/http-client.ts" name="HttpClientOptions" />
+
+<auto-type-table path="../../../../../packages/core/src/transport/http-client.ts" name="RequestOptions" />
+
 ### Options reference
 
 | Option | Purpose |
@@ -105,6 +111,10 @@ You can still pass a custom `HttpClient` instance to any client constructor when
 | `defaultHeaders?: Record<string, string>` | Inject headers across every transport. |
 | `timeoutMs?: number` | Default request timeout per transport (can be overridden per request). |
 | `hooks?: HttpClientOptions['hooks']` | Share logging hooks across transports. |
+
+<auto-type-table path="../../../../../packages/core/src/index.ts" name="CoreTransportOptions" />
+
+<auto-type-table path="../../../../../packages/core/src/index.ts" name="QubicCore" />
 
 ## ArchiveClient
 
@@ -192,3 +202,5 @@ Every `HttpClient` exposes:
 - `getRequestHistory()` – the raw history array when you want to roll your own telemetry view.
 
 Pair these with the CLI (`apps/cli`) to build commands such as `qubic transport:inspect`, or ship them to your logging pipeline to correlate downstream failures with peer health.
+
+<auto-type-table path="../../../../../packages/core/src/transport/http-client.ts" name="HttpClientDiagnostics" />

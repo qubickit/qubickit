@@ -1,0 +1,100 @@
+---
+title: "Adapters & Hooks"
+description: "Customize storage, cache, transport hooks, telemetry, and sync."
+icon: Plug
+cta:
+  label: "Swap adapters"
+  href: "#storage-adapters"
+---
+
+## Storage adapters
+
+```ts
+import { createFilePersistenceAdapter } from '@qubickit/sdk';
+import { WalletProfileSchema } from '@qubickit/sdk/wallet';
+
+const storage = createFilePersistenceAdapter({
+  filePath: './data/wallets.json',
+  schema: WalletProfileSchema,
+  pretty: true
+});
+
+const sdk = createQubicSdk({ storage });
+```
+
+Supported adapters:
+
+- Memory (`createMemoryStorageAdapter`)
+- File (`createFilePersistenceAdapter`)
+- IndexedDB (`createIndexedDbPersistenceAdapter`)
+- Secure wrapper (`createSecurePersistenceAdapter`)
+
+All adapters share the same `StorageAdapter<T>` contract, so if you follow the interface you can swap implementations without touching the wallet/session layers.
+
+<auto-type-table path="../../../../../packages/sdk/src/adapters/storage.ts" name="StorageAdapterOptions" />
+
+<auto-type-table path="../../../../../packages/sdk/src/adapters/storage.ts" name="StorageAdapter" />
+
+## Cache adapters
+
+```ts
+const cache = createMemoryCacheAdapter({
+  schema: z.unknown(),
+  defaultTtlMs: 2_000
+});
+
+const sdk = createQubicSdk({ cache });
+```
+
+You can write your own adapter as long as it implements the `CacheAdapter<T>` interface. Drop-in implementations for Redis, disk caches, etc. all work the same way.
+
+<auto-type-table path="../../../../../packages/sdk/src/adapters/cache.ts" name="CacheAdapterOptions" />
+
+<auto-type-table path="../../../../../packages/sdk/src/adapters/cache.ts" name="CacheAdapter" />
+
+## Transport hooks
+
+```ts
+const hooks = createTransportHooksRegistry();
+hooks.register({
+  beforeRequest: ({ method }) => metrics.record('sdk.request', 1, { method })
+});
+
+const sdk = createQubicSdk({ transportHooks: hooks });
+```
+
+Hooks wrap every core HTTP call (`query`, `archive`, `stats`, `http`), so you can instrument requests globally.
+
+<auto-type-table path="../../../../../packages/sdk/src/transport/hooks.ts" name="TransportHook" />
+
+<auto-type-table path="../../../../../packages/sdk/src/transport/hooks.ts" name="TransportHooksRegistry" />
+
+<auto-type-table path="../../../../../packages/sdk/src/transport/hooks.ts" name="TransportCallOptions" />
+
+## Telemetry & sync
+
+```ts
+const sdk = createQubicSdk({
+  logger: {
+    info: (msg, ctx) => console.info(msg, ctx)
+  },
+  metrics: {
+    record: (metric, value, tags) => statsd.increment(metric, value, tags)
+  },
+  sync: {
+    intervalMs: 15_000,
+    identities: ['TREASURY_ID']
+  }
+});
+
+sdk.sync.start();
+```
+
+- `logger`/`metrics` defaults to console/no-op; override to stream into your existing stack.
+- `sync` runs background refresh cycles (list transactions, get balance) to keep caches warm and feeds metrics for success/failure.
+
+### Use cases
+
+- **CLI** – log everything to stdout/stderr but send metrics to Datadog/Prometheus for fleet monitoring.
+- **Browser UI** – implement a silent logger in production, but keep metrics flowing to your hosted analytics backend so you can alert on sync failures.
+- **Background workers** – combine transport hooks + telemetry to build OpenTelemetry spans around every RPC.

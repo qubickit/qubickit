@@ -1,0 +1,65 @@
+---
+title: "Contract Metadata"
+description: "Use the generated contract definitions for type-safe queries and mutations."
+icon: Brackets
+cta:
+  label: "Generate definitions"
+  href: "https://github.com/qubickit/qubickit-mono/tree/main/packages/sdk/scripts"
+---
+
+## Static registry + generator
+
+The SDK ships with a contract registry (`static/registry/smart_contracts.json`) plus a generator (`scripts/generate-contract-definitions.ts`) that parses the upstream header files.
+
+```bash
+bun run --cwd packages/sdk contracts:generate
+```
+
+This produces `src/contracts/generated.ts` with:
+
+- Contract names, indexes, and addresses.
+- Function/procedure IDs.
+- TypeScript interfaces for every `_input`/`_output` struct referenced in the header.
+
+## Using generated types
+
+```ts
+import type { GeneratedStructMap } from '@qubickit/sdk/contracts';
+
+type IssueAssetInput = GeneratedStructMap['QX_IssueAsset_input'];
+
+const payload: IssueAssetInput = {
+  assetName: BigInt('0x1234'),
+  numberOfShares: 1_000,
+  unitOfMeasurement: 1,
+  numberOfDecimalPlaces: 2
+};
+```
+
+You still need to serialize the struct data to `Uint8Array` before sending it to the contract; the type just keeps the fields honest.
+
+## ContractService helpers
+
+```ts
+await sdk.contracts.service.call({
+  contract: 'QX',
+  functionName: 'Fees',
+  payload: encode(payload)
+});
+
+await sdk.contracts.service.invoke({
+  contract: 'QX',
+  procedureName: 'IssueAsset',
+  signer: { sessionToken },
+  amount: '0',
+  input: encode(issueAssetPayload)
+});
+```
+
+If you don’t want to pass names, you can supply `functionId`/`procedureId` directly—`ContractService` will fall back to the raw numbers without hitting the generator.
+
+## API reference
+
+<auto-type-table path="../../../../../packages/sdk/src/contracts/service.ts" name="ContractCallOptions" />
+
+<auto-type-table path="../../../../../packages/sdk/src/contracts/service.ts" name="ContractInvokeOptions" />

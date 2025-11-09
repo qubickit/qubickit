@@ -3,6 +3,13 @@ import { WatchChannel } from './channel';
 import { waitFor } from './utils';
 
 type BalanceResponse = Awaited<ReturnType<QubicSdk['core']['http']['getBalance']>>;
+type FreshBalanceFn = (
+  identity: string,
+  options?: {
+    useCache?: boolean;
+  }
+) => Promise<BalanceResponse>;
+type BalanceSnapshot = Pick<BalanceResponse, 'balance'>;
 
 export interface BalanceWatcherTelemetry {
   onPoll?(identity: string): void;
@@ -25,16 +32,26 @@ export interface BalanceWatchHandle {
 export function createBalanceWatcher(sdk: QubicSdk, options: BalanceWatcherOptions): BalanceWatchHandle {
   const channel = new WatchChannel<BalanceResponse>();
   let stopped = false;
-  let previousFingerprint: string | undefined;
+  let previousSnapshot: BalanceSnapshot | undefined;
+  const getFreshBalance = sdk.core.http.getBalance.bind(sdk.core.http) as FreshBalanceFn;
+
+  const initialize = async () => {
+    try {
+      const response = await getFreshBalance(options.identity, { useCache: false });
+      previousSnapshot = { balance: response.balance };
+    } catch (error) {
+      channel.emitError(error);
+      options.telemetry?.onError?.(error);
+    }
+  };
 
   const poll = async () => {
     while (!stopped) {
       try {
         options.telemetry?.onPoll?.(options.identity);
-        const response = await sdk.core.http.getBalance(options.identity);
-        const fingerprint = JSON.stringify(response.balance ?? response);
-        if (fingerprint !== previousFingerprint) {
-          previousFingerprint = fingerprint;
+        const response = await getFreshBalance(options.identity, { useCache: false });
+        if (!isSameBalance(previousSnapshot?.balance, response.balance)) {
+          previousSnapshot = { balance: response.balance };
           channel.emitData(response);
           options.telemetry?.onUpdate?.(response);
         }
@@ -48,7 +65,12 @@ export function createBalanceWatcher(sdk: QubicSdk, options: BalanceWatcherOptio
     }
   };
 
-  poll();
+  void (async () => {
+    await initialize();
+    if (!stopped) {
+      poll();
+    }
+  })();
 
   return {
     channel,
@@ -58,3 +80,24 @@ export function createBalanceWatcher(sdk: QubicSdk, options: BalanceWatcherOptio
     }
   };
 }
+
+const isSameBalance = (
+  previous: BalanceResponse['balance'] | undefined,
+  current: BalanceResponse['balance'] | undefined
+): boolean => {
+  if (!previous && !current) return true;
+  if (!previous || !current) return false;
+  if ('available' in previous && 'available' in current) {
+    return previous.available === current.available && previous.pending === current.pending;
+  }
+  if ('balance' in previous && 'balance' in current) {
+    return (
+      previous.balance === current.balance &&
+      previous.incomingAmount === current.incomingAmount &&
+      previous.outgoingAmount === current.outgoingAmount &&
+      previous.numberOfIncomingTransfers === current.numberOfIncomingTransfers &&
+      previous.numberOfOutgoingTransfers === current.numberOfOutgoingTransfers
+    );
+  }
+  return JSON.stringify(previous) === JSON.stringify(current);
+};

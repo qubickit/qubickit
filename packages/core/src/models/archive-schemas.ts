@@ -70,10 +70,18 @@ export const StatusSchema = z.object({
 
 export const LatestTickSchema = z
   .object({
-    tickNumber: z.union([z.number(), z.string()]),
+    tickNumber: z.union([z.number(), z.string()]).optional(),
+    latestTick: z.union([z.number(), z.string()]).optional(),
     epoch: z.union([z.number(), z.string()]).optional()
   })
-  .transform((value) => ({
-    tickNumber: typeof value.tickNumber === 'string' ? Number(value.tickNumber) : value.tickNumber,
-    epoch: value.epoch === undefined ? undefined : typeof value.epoch === 'string' ? Number(value.epoch) : value.epoch
-  }));
+  .transform((value) => {
+    const source = value.tickNumber ?? value.latestTick;
+    if (source === undefined) {
+      throw new Error('Latest tick payload missing tick number.');
+    }
+    const epochValue = value.epoch === undefined ? undefined : value.epoch;
+    return {
+      tickNumber: typeof source === 'string' ? Number(source) : source,
+      epoch: epochValue === undefined ? undefined : typeof epochValue === 'string' ? Number(epochValue) : epochValue
+    };
+  });

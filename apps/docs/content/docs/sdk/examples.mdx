@@ -1,0 +1,101 @@
+---
+title: "Examples & Use Cases"
+description: "How teams are already wiring the SDK into real Qubic workflows."
+icon: Bookmark
+cta:
+  label: "Copy recipes"
+  href: "#custodial-wallets"
+---
+
+## Custodial wallets
+
+```ts
+const sdk = createQubicSdk({
+  storage: createFilePersistenceAdapter({
+    filePath: './data/wallets.json',
+    schema: WalletProfileSchema,
+    pretty: true
+  })
+});
+
+const profile = await sdk.wallet.createProfile({ seed, passphrase, label: 'custody' });
+const token = await sdk.wallet.issueSessionToken({ profileId: profile.profileId, passphrase });
+
+sdk.multiWallet.setLimit({ profileId: profile.profileId, maxTransfersPerMinute: 3 });
+sdk.multiWallet.enforceLimit(profile.profileId, Number(amount));
+await sdk.transfers.send({ destination, amount, signer: { sessionToken: token.token } });
+```
+
+- Encrypt seeds on disk via the file adapter.
+- Reuse session tokens across CLI + API flows.
+- Enforce shared rates with `multiWallet`.
+
+## Market-makers & bots
+
+```ts
+const session = sdk.createSessionClient({ defaultCacheTtlMs: 500 });
+
+const orderWatcher = session.watchContract('QX', { intervalMs: 2_000 });
+orderWatcher.channel.subscribe(async ({ transaction }) => {
+  // rebalance bids/asks when your thresholds are hit
+  await sdk.contracts.service.invoke({
+    contract: 'QX',
+    procedureName: 'AddToBidOrder',
+    signer: { sessionToken },
+    amount: '0',
+    input: encodeBidPayload(transaction)
+  });
+});
+```
+
+- Stream contract events without reimplementing SSE.
+- Type payloads with the generated contract structs.
+- Queue failed invocations using the transfer queue.
+
+## Treasury automation
+
+```ts
+sdk.sync.start(); // keep caches warm
+
+const transfers = sdk.watchers.transfers('TREASURY_ID', { intervalMs: 5_000 });
+transfers.channel.subscribe(({ transaction }) => {
+  logToAuditStore(transaction);
+});
+
+try {
+  sdk.multiWallet.enforceLimit(profile.profileId, Number(amount));
+  await sdk.transfers.send(request, { telemetry });
+} catch (error) {
+  audit.error(error);
+  await sdk.transfers.getQueue().enqueue('treasury-retry', request);
+}
+```
+
+- Sync daemon + watchers keep dashboards current.
+- Limits + queue protect against runaway scripts.
+- Telemetry hooks feed audit dashboards.
+
+## CLI tooling
+
+```ts
+const sdk = createQubicSdk({ logger: cliLogger, metrics: cliMetrics });
+const session = await sdk.wallet.issueSessionToken({ profileId, passphrase });
+
+await sdk.contracts.service.call({
+  contract: 'QX',
+  functionName: 'Fees',
+  payload: encodeFeesPayload()
+});
+
+await sdk.contracts.service.invoke({
+  contract: 'QX',
+  procedureName: 'IssueAsset',
+  signer: { sessionToken: session.token },
+  amount: '0',
+  input: encodeIssueAssetPayload()
+});
+```
+
+- Shared session tokens keep CLI commands stateless.
+- Logger/metrics hooks plug into your CLI telemetry.
+- Contract metadata prevents typo-prone payloads.

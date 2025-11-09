@@ -12,5 +12,11 @@ export default [
     rules: {
       'no-console': ['warn', { allow: ['warn', 'error'] }]
     }
+  },
+  {
+    files: ['**/*.test.ts', '**/*.test.tsx'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off'
+    }
   }
 ];

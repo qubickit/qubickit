@@ -16,11 +16,11 @@ import { parseWithSchema } from '../utils/validation';
 export class HttpApiClient {
   constructor(private readonly http: HttpClient) {}
 
-  async getBalance(identity: string) {
+  async getBalance(identity: string, options: { useCache?: boolean } = {}) {
     identitySchema.parse(identity);
     const response = await this.http.request({
       path: `/v1/balances/${identity}`,
-      useCache: true
+      useCache: options.useCache ?? true
     });
     return parseWithSchema(BalanceResponseSchema, response);
   }

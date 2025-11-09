@@ -10,3 +10,8 @@ export * from './persistence';
 export * from './queue';
 export * from './transfers';
 export * from './utils/identity';
+export * from './errors/sdk-error';
+export * from './telemetry/logger';
+export * from './telemetry/metrics';
+export * from './wallet/multi-wallet-manager';
+export * from './sync/sync-daemon';

@@ -1,0 +1,63 @@
+---
+title: "Errors & Telemetry"
+description: "Understand SDK error codes, remediation hints, and logging best practices."
+icon: AlertTriangle
+cta:
+  label: "Handle errors"
+  href: "#error-hierarchy"
+---
+
+## Error hierarchy
+
+All SDK errors extend `QubicSdkError`:
+
+```ts
+try {
+  await sdk.transfers.send(request);
+} catch (error) {
+  if (error instanceof QubicSdkError) {
+    console.error(error.code, error.remediation, error.context);
+  }
+}
+```
+
+- `WalletError` – missing profile/account/password issues.
+- `WalletLimitError` – requests that exceed `multiWallet` limits.
+- `TransferError` – broadcast/monitor failures.
+- `SyncError` – background daemon issues (network problems, unauthorized).
+
+Each error includes a `code`, `message`, optional `remediation`, and `context` object.
+
+## Logging best practices
+
+```ts
+const sdk = createQubicSdk({
+  logger: {
+    error: (msg, ctx) => logger.error(msg, ctx)
+  }
+});
+
+try {
+  await sdk.transfers.send(request);
+} catch (error) {
+  sdk.telemetry.logger.error('transfer_failed', { error });
+}
+```
+
+Use structured logging (`{ code, remediation, context }`) so observability pipelines can group incidents accurately.
+
+## Metrics
+
+Every watcher, transfer, sync cycle, and contract call emits metrics through the `metrics` hook:
+
+```ts
+sdk.telemetry.metrics.record('watcher.balance.emit', 1, { identity });
+```
+
+Tags (`identity`, `contract`, `method`) let you slice dashboards by identity or contract. Use them to build alerts for stuck queues, failing sync cycles, or flapping watchers.
+
+## Use cases
+
+- **Multi-tenant dashboards** – tag hooks with `tenantId` or `workspaceId` so you can slice by customer.
+- **Compliance** – surface errors with `error.code === 'WALLET_LIMIT_EXCEEDED'` to your audit dashboard.
+- **Self-healing** – if `TransferError` occurs, enqueue the payload and alert an operator with the remediation hint.

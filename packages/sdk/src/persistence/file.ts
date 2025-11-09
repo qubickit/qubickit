@@ -12,6 +12,9 @@ export interface FilePersistenceAdapterOptions<TSchema extends ZodTypeAny> {
 
 type StoreShape<TValue> = Record<string, TValue>;
 
+const isFileNotFound = (error: unknown): error is NodeJS.ErrnoException =>
+  Boolean(error && typeof error === 'object' && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT');
+
 export function createFilePersistenceAdapter<TSchema extends ZodTypeAny>(
   options: FilePersistenceAdapterOptions<TSchema>
 ): PersistenceAdapter<z.infer<TSchema>> {
@@ -25,8 +28,8 @@ export function createFilePersistenceAdapter<TSchema extends ZodTypeAny>(
         store[key] = schema.parse(value);
       }
       return store;
-    } catch (error: any) {
-      if (error?.code === 'ENOENT') {
+    } catch (error) {
+      if (isFileNotFound(error)) {
         return {};
       }
       throw error;

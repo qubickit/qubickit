@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { join } from 'node:path';
 
 import { ContractRegistry } from './registry';
 import { ContractMetadataSchema } from './schemas';

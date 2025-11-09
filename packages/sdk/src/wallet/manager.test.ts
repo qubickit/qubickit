@@ -1,6 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { WalletManager } from './manager';
+
+vi.mock('@qubickit/core', () => ({
+  createIdentityPackage: vi.fn(async (_seed: string, index: number = 0) => {
+    const base = new Uint8Array(32).fill(index);
+    return {
+      privateKey: base,
+      publicKey: base,
+      publicKeyWithChecksum: new Uint8Array(36).fill(index),
+      identity: `IDENTITY-${index}`
+    };
+  })
+}));
 
 const seed = 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyabcd';
 const passphrase = 'correct horse battery staple';

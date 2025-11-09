@@ -5,14 +5,15 @@ export type EventMap = Record<string, unknown>;
 export type EventListener<T> = (payload: T) => void;
 
 export class TypedEventEmitter<TEvents extends EventMap> {
-  private readonly listeners = new Map<keyof TEvents, Set<EventListener<any>>>();
+  private readonly listeners = new Map<keyof TEvents, Set<EventListener<TEvents[keyof TEvents]>>>();
 
   on<K extends keyof TEvents>(event: K, listener: EventListener<TEvents[K]>, options?: SubscribeOptions): Subscription {
     assertNotAborted(options?.signal);
     let eventListeners = this.listeners.get(event) as Set<EventListener<TEvents[K]>> | undefined;
     if (!eventListeners) {
-      eventListeners = new Set();
-      this.listeners.set(event, eventListeners as Set<EventListener<any>>);
+      const newSet = new Set<EventListener<TEvents[keyof TEvents]>>();
+      this.listeners.set(event, newSet);
+      eventListeners = newSet as Set<EventListener<TEvents[K]>>;
     }
     eventListeners.add(listener);
 

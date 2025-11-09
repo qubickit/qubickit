@@ -19,7 +19,8 @@ describe('createMemoryStorageAdapter', () => {
 
   it('rejects invalid payloads', async () => {
     const storage = createMemoryStorageAdapter({ schema });
-    await expect(storage.write('session', { id: 'bad' } as any)).rejects.toThrow(/createdAt/);
+    // @ts-expect-error - missing createdAt should trigger validation error
+    await expect(storage.write('session', { id: 'bad' })).rejects.toThrow(/createdAt/);
   });
 
   it('supports delete and clear operations', async () => {

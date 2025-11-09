@@ -9,6 +9,7 @@ import {
 import { source } from '@/lib/source';
 import type * as PageTree from 'fumadocs-core/page-tree';
 import defaultMdxComponents from 'fumadocs-ui/mdx';
+import { TypeTable } from 'fumadocs-ui/components/type-table';
 import { docs } from '@/.source';
 import { toClientRenderer } from 'fumadocs-mdx/runtime/vite';
 import { baseOptions } from '@/lib/layout.shared';
@@ -35,7 +36,7 @@ const renderer = toClientRenderer(
         <DocsTitle>{frontmatter.title}</DocsTitle>
         <DocsDescription>{frontmatter.description}</DocsDescription>
         <DocsBody>
-          <Mdx components={{ ...defaultMdxComponents }} />
+          <Mdx components={{ ...defaultMdxComponents, TypeTable }} />
         </DocsBody>
       </DocsPage>
     );

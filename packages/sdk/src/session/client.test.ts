@@ -3,6 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import type { QubicSdk } from '../sdk';
 import { createTransportHooksRegistry } from '../transport/hooks';
 import { SessionClient } from './client';
+import * as transferWatchers from '../watchers/transfers';
+import * as balanceWatchers from '../watchers/balances';
+import * as contractWatchers from '../watchers/contracts';
 
 const createMockSdk = () => {
   const query = {
@@ -14,6 +17,9 @@ const createMockSdk = () => {
   };
   const http = {
     getBalance: vi.fn()
+  };
+  const wallet = {
+    resumeSession: vi.fn()
   };
   const sdk = {
     core: {
@@ -28,12 +34,8 @@ const createMockSdk = () => {
         }
       }
     },
-    adapters: {
-      storage: {} as any,
-      cache: {} as any
-    },
     hooks: createTransportHooksRegistry(),
-    wallet: {} as any,
+    wallet,
     createSessionClient: vi.fn()
   } satisfies Partial<QubicSdk>;
   return { sdk: sdk as QubicSdk, query, archive, http };
@@ -80,5 +82,38 @@ describe('SessionClient', () => {
     await client.getBalance('IDENTITY');
     await client.getBalance('IDENTITY');
     expect(http.getBalance).toHaveBeenCalledTimes(1);
+  });
+
+  it('creates transfer watchers via helper', () => {
+    const { sdk } = createMockSdk();
+    const client = new SessionClient(sdk);
+    const handle = { channel: { subscribe: vi.fn() }, stop: vi.fn() };
+    const spy = vi.spyOn(transferWatchers, 'createTransferWatcher').mockReturnValue(handle as any);
+    const result = client.watchTransfers('ID', { intervalMs: 1000 });
+    expect(spy).toHaveBeenCalledWith(client, expect.objectContaining({ identity: 'ID', intervalMs: 1000 }));
+    expect(result).toBe(handle);
+    spy.mockRestore();
+  });
+
+  it('creates balance watchers via helper', () => {
+    const { sdk } = createMockSdk();
+    const client = new SessionClient(sdk);
+    const handle = { channel: { subscribe: vi.fn() }, stop: vi.fn() };
+    const spy = vi.spyOn(balanceWatchers, 'createBalanceWatcher').mockReturnValue(handle as any);
+    const result = client.watchBalance('ID', { intervalMs: 500 });
+    expect(spy).toHaveBeenCalledWith(sdk, expect.objectContaining({ identity: 'ID', intervalMs: 500 }));
+    expect(result).toBe(handle);
+    spy.mockRestore();
+  });
+
+  it('creates contract watchers via helper', () => {
+    const { sdk } = createMockSdk();
+    const client = new SessionClient(sdk);
+    const handle = { channel: { subscribe: vi.fn() }, stop: vi.fn() };
+    const spy = vi.spyOn(contractWatchers, 'createContractWatcher').mockReturnValue(handle as any);
+    const result = client.watchContract('CONTRACT', { intervalMs: 750 });
+    expect(spy).toHaveBeenCalledWith(client, expect.objectContaining({ contractIdentity: 'CONTRACT', intervalMs: 750 }));
+    expect(result).toBe(handle);
+    spy.mockRestore();
   });
 });

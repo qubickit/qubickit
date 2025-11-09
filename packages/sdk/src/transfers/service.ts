@@ -4,17 +4,17 @@ import {
   encodeSignedTransaction,
   normalizeAmount,
   signTransaction,
-  createIdentityPackage,
-  type NetworkMetadata
+  createIdentityPackage
 } from '@qubickit/core';
 import { z } from 'zod';
 
 import type { QubicSdk } from '../sdk';
-import { CommandQueue } from '../queue';
+import { CommandQueue, type CommandRecord } from '../queue';
 import type { PersistenceAdapter } from '../persistence';
 import { createMemoryPersistenceAdapter } from '../persistence';
 import { identityToPublicKey } from '../utils/identity';
 import type { WalletSessionHandle } from '../wallet';
+import { TransferError } from '../errors/sdk-error';
 
 const destinationSchema = z.string().min(1);
 
@@ -29,11 +29,18 @@ export interface TransferSignerSession {
 
 export type TransferSigner = TransferSignerSeed | TransferSignerSession;
 
+export interface TransferMetadata {
+  tickNumber?: number;
+  timeLock?: Uint8Array;
+  varStruct?: Uint8Array;
+  procedureId?: number;
+}
+
 export interface TransferRequest {
   destination: string;
   amount: string | number | bigint;
   signer: TransferSigner;
-  metadata?: Partial<NetworkMetadata> & { procedureId?: number };
+  metadata?: TransferMetadata;
   inputType?: number;
   input?: Uint8Array;
   dryRun?: boolean;
@@ -61,14 +68,16 @@ export interface TransferResult {
 }
 
 export interface TransferServiceOptions {
-  persistence?: PersistenceAdapter<any>;
+  persistence?: PersistenceAdapter<CommandRecord<TransferRequest>>;
 }
 
 export class TransferService {
   private readonly queue: CommandQueue<TransferRequest>;
 
   constructor(private readonly sdk: QubicSdk, options: TransferServiceOptions = {}) {
-    const persistence = options.persistence ?? createMemoryPersistenceAdapter<TransferRequest>();
+    const persistence =
+      options.persistence ??
+      createMemoryPersistenceAdapter<CommandRecord<TransferRequest>>();
     this.queue = new CommandQueue({
       persistence
     });
@@ -115,7 +124,7 @@ export class TransferService {
       if (options.queueOnFail ?? request.queueOnFail ?? true) {
         await this.queue.enqueue('transfer', request);
       }
-      throw error;
+      throw new TransferError('Transfer failed to broadcast', { destination: request.destination }, error);
     }
   }
 

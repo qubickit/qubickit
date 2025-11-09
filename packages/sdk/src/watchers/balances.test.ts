@@ -17,9 +17,11 @@ const createMockSdk = () =>
         }
       }
     },
-    adapters: { storage: {} as any, cache: {} as any },
-    hooks: {} as any,
-    wallet: {} as any,
+    adapters: {} as QubicSdk['adapters'],
+    hooks: {},
+    wallet: {
+      resumeSession: vi.fn()
+    },
     createSessionClient: vi.fn()
   }) as unknown as QubicSdk;
 

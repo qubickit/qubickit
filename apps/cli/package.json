@@ -3,15 +3,22 @@
   "version": "0.0.0",
   "type": "module",
   "bin": {
-    "qubic": "./dist/index.js"
+    "qubic": "./dist/index.js",
+    "qk": "./dist/index.js"
   },
   "scripts": {
-    "dev": "bun --watch src/index.ts",
-    "build": "echo \"TODO: bundle CLI\"",
-    "lint": "echo \"TODO: lint CLI\"",
-    "test": "echo \"TODO: CLI tests\""
+    "dev": "bun src/index.ts",
+    "dev:watch": "bun --watch src/index.ts",
+    "build": "tsup",
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "test": "bun test"
   },
   "dependencies": {
-    "@qubickit/sdk": "workspace:*"
+    "@qubickit/core": "workspace:^1.0.0",
+    "@qubickit/sdk": "workspace:*",
+    "chalk": "^5",
+    "commander": "^14.0.2",
+    "ora": "^8",
+    "zod": "^3"
   }
 }

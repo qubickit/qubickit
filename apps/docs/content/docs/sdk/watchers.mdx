@@ -1,0 +1,95 @@
+---
+title: "Watchers & Streams"
+description: "Tick, balance, transfer, and contract watchers with async iterators and telemetry."
+icon: Eye
+cta:
+  label: "Subscribe to streams"
+  href: "#tick-watchers"
+---
+
+## Tick watchers
+
+```ts
+const tickStream = sdk.watchers.ticks({ intervalMs: 5_000 });
+tickStream.channel.subscribe((tick) => console.log('tick', tick));
+
+for await (const tick of tickStream.channel.asObservable().toAsyncIterator()) {
+  // react to streaming ticks
+}
+```
+
+You can pass `TickStreamOptions` to control telemetry hooks or swap in a custom TickWatcher implementation.
+
+### Tick watcher types
+
+<auto-type-table path="../../../../../packages/sdk/src/watchers/ticks.ts" name="TickStreamOptions" />
+
+<auto-type-table path="../../../../../packages/sdk/src/watchers/ticks.ts" name="TickWatcherTelemetry" />
+
+<auto-type-table path="../../../../../packages/sdk/src/watchers/ticks.ts" name="TickStream" />
+
+## Balances
+
+```ts
+const balanceHandle = sdk.watchers.balance(identity, {
+  intervalMs: 1_000,
+  telemetry: {
+    onUpdate: (payload) => console.info('balance update', payload)
+  }
+});
+```
+
+Balance watchers reuse the session client, so they automatically benefit from caching/throttling/Vitest mocks.
+
+### Balance watcher types
+
+<auto-type-table path="../../../../../packages/sdk/src/watchers/balances.ts" name="BalanceWatcherOptions" />
+
+<auto-type-table path="../../../../../packages/sdk/src/watchers/balances.ts" name="BalanceWatcherTelemetry" />
+
+<auto-type-table path="../../../../../packages/sdk/src/watchers/balances.ts" name="BalanceWatchHandle" />
+
+## Transfers
+
+```ts
+const transferHandle = sdk.watchers.transfers(identity, {
+  intervalMs: 2_000,
+  limit: 25
+});
+
+transferHandle.channel.subscribe(({ transaction }) => {
+  console.log('new transfer', transaction.hash);
+});
+```
+
+- Deduplicates transactions per identity.
+- Tracks the highest tick processed to avoid resending older transactions.
+
+### Transfer watcher types
+
+<auto-type-table path="../../../../../packages/sdk/src/watchers/transfers.ts" name="TransferWatcherOptions" />
+
+<auto-type-table path="../../../../../packages/sdk/src/watchers/transfers.ts" name="TransferWatcherTelemetry" />
+
+<auto-type-table path="../../../../../packages/sdk/src/watchers/transfers.ts" name="TransferWatchHandle" />
+
+## Contracts
+
+```ts
+const contractHandle = sdk.watchers.contracts('QX', {
+  intervalMs: 4_000,
+  telemetry: {
+    onPoll: ({ contract }) => console.info('poll', contract)
+  }
+});
+```
+
+Combine contract watchers with the transfer queue and sync daemon to build reactive dashboards for on-chain events.
+
+### Contract watcher types
+
+<auto-type-table path="../../../../../packages/sdk/src/watchers/contracts.ts" name="ContractWatcherOptions" />
+
+<auto-type-table path="../../../../../packages/sdk/src/watchers/contracts.ts" name="ContractWatcherTelemetry" />
+
+<auto-type-table path="../../../../../packages/sdk/src/watchers/contracts.ts" name="ContractWatchHandle" />

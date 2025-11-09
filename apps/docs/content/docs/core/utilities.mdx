@@ -67,6 +67,8 @@ const watcher = new TickWatcher(core.archive, {
 });
 ```
 
+<auto-type-table path="../../../../../packages/core/src/watchers/tick-watcher.ts" name="TickWatcherOptions" />
+
 ## EventStreamClient & subscriptions
 
 `EventStreamClient` wraps Server-Sent Events (SSE) endpoints and exposes `subscribe(path, options)` which returns an `EventStreamSubscription`. It handles reconnects, retry delays, abort signals, and header injection.
@@ -109,6 +111,8 @@ export interface CacheAdapter<T = unknown> {
 ```
 
 Bring your own (Cloudflare KV, Upstash, DynamoDB, etc.) by implementing that contract.
+
+<auto-type-table path="../../../../../packages/core/src/cache/cache-adapter.ts" name="CacheAdapter" />
 
 ## Error classes
 

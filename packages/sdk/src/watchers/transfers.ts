@@ -4,6 +4,7 @@ import { waitFor } from './utils';
 
 type TransferTransaction = {
   hash?: string;
+  txId?: string;
   tickNumber?: number;
   [key: string]: unknown;
 };
@@ -68,19 +69,21 @@ export function createTransferWatcher(session: SessionClient, options: TransferW
           return bTick - aTick;
         });
         const fresh = newestFirst.filter((tx) => {
-          if (!tx.hash) return false;
-          if (seenHashes.has(tx.hash)) return false;
+          const hash = extractTransactionHash(tx);
+          if (!hash) return false;
+          if (seenHashes.has(hash)) return false;
           if (typeof tx.tickNumber === 'number' && tx.tickNumber < highestTick) {
             return false;
           }
           return true;
         });
         for (const tx of fresh.reverse()) {
-          if (!tx.hash) continue;
+          const hash = extractTransactionHash(tx);
+          if (!hash) continue;
           const event: TransferEvent = { identity: options.identity, transaction: tx };
           channel.emitData(event);
           options.telemetry?.onData?.(event);
-          remember(tx.hash, tx.tickNumber);
+          remember(hash, tx.tickNumber);
         }
       } catch (error) {
         channel.emitError(error);
@@ -102,3 +105,9 @@ export function createTransferWatcher(session: SessionClient, options: TransferW
     }
   };
 }
+
+const extractTransactionHash = (tx: TransferTransaction): string | undefined => {
+  if (typeof tx.hash === 'string') return tx.hash;
+  if (typeof tx.txId === 'string') return tx.txId;
+  return undefined;
+};

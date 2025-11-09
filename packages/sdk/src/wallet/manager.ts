@@ -6,6 +6,7 @@ import { decryptSecretAsString, encryptSecret, type EncryptedPayload } from '../
 import { assertNotAborted } from '../internal/abort';
 import { randomUUID } from '../internal/random';
 import { WalletAccountSchema, WalletProfileSchema, type WalletAccount, type WalletProfile, SeedSchema } from './schemas';
+import { WalletError } from '../errors/sdk-error';
 
 const CreateProfileInputSchema = z.object({
   profileId: z.string().min(1).optional(),
@@ -31,9 +32,9 @@ const SessionTokenOptionsSchema = z.object({
   ttlMs: z.number().int().positive().optional()
 });
 
-export interface CreateProfileInput extends z.input<typeof CreateProfileInputSchema> {}
-export interface AddAccountInput extends z.input<typeof AddAccountSchema> {}
-export interface IssueSessionOptions extends z.input<typeof SessionTokenOptionsSchema> {}
+export type CreateProfileInput = z.input<typeof CreateProfileInputSchema>;
+export type AddAccountInput = z.input<typeof AddAccountSchema>;
+export type IssueSessionOptions = z.input<typeof SessionTokenOptionsSchema>;
 
 export interface WalletSessionHandle {
   token: string;
@@ -44,7 +45,7 @@ export interface WalletSessionHandle {
   createdAt: number;
 }
 
-interface WalletSessionRecord extends WalletSessionHandle {}
+type WalletSessionRecord = WalletSessionHandle;
 
 export interface WalletManagerOptions {
   storage?: StorageAdapter<typeof WalletProfileSchema>;
@@ -107,7 +108,10 @@ export class WalletManager {
     const profile = await this.requireProfile(payload.profileId);
     const seed = await this.decryptSeed(profile.profileId, payload.passphrase);
     if (profile.accounts.some((account) => account.derivationIndex === payload.derivationIndex)) {
-      throw new Error(`Account with index ${payload.derivationIndex} already exists.`);
+      throw new WalletError(`Account with index ${payload.derivationIndex} already exists.`, {
+        profileId: payload.profileId,
+        derivationIndex: payload.derivationIndex
+      });
     }
     const account = await this.createAccountFromSeed(seed, {
       derivationIndex: payload.derivationIndex,
@@ -191,12 +195,18 @@ export class WalletManager {
   private resolveAccount(profile: WalletProfile, options: { accountId?: string; derivationIndex?: number }): WalletAccount {
     if (options.accountId) {
       const found = profile.accounts.find((account) => account.accountId === options.accountId);
-      if (!found) throw new Error(`Account ${options.accountId} not found.`);
+      if (!found) {
+        throw new WalletError(`Account ${options.accountId} not found.`, { accountId: options.accountId });
+      }
       return found;
     }
     if (typeof options.derivationIndex === 'number') {
       const found = profile.accounts.find((account) => account.derivationIndex === options.derivationIndex);
-      if (!found) throw new Error(`Account with derivation index ${options.derivationIndex} not found.`);
+      if (!found) {
+        throw new WalletError(`Account with derivation index ${options.derivationIndex} not found.`, {
+          derivationIndex: options.derivationIndex
+        });
+      }
       return found;
     }
     const primary = profile.accounts[0];
@@ -208,7 +218,7 @@ export class WalletManager {
 
   private async requireProfile(profileId: string): Promise<WalletProfile> {
     const profile = await this.storage.read(profileId);
-    if (!profile) throw new Error(`Profile ${profileId} not found.`);
+    if (!profile) throw new WalletError(`Profile ${profileId} not found.`, { profileId });
     return profile;
   }
 }

@@ -22,20 +22,20 @@ export class TickWatcher {
   private readonly listeners = new Set<TickListener>();
   private streamSubscription: TickStreamSubscription | null = null;
   private streamTask: Promise<void> | null = null;
+  private initializing: Promise<void> | null = null;
 
   constructor(private readonly archiveClient: ArchiveClient, private readonly options: TickWatcherOptions = {}) {}
 
   start() {
-    if (this.options.eventStream) {
-      if (this.streamSubscription) return;
-      this.streamSubscription = this.options.eventStream.createSubscription();
-      this.streamTask = this.consumeStream(this.streamSubscription);
-      return;
-    }
-
-    if (this.timer) return;
-    const interval = this.options.intervalMs ?? 5_000;
-    this.timer = setInterval(() => this.poll(), interval);
+    if (this.streamSubscription || this.timer || this.initializing) return;
+    this.initializing = this.initializeLastTick()
+      .catch((error) => {
+        console.warn('TickWatcher initialization failed', error);
+      })
+      .finally(() => {
+        this.initializing = null;
+        this.beginWatching();
+      });
   }
 
   stop() {
@@ -65,6 +65,30 @@ export class TickWatcher {
     }
   }
 
+  private beginWatching() {
+    if (this.options.eventStream) {
+      this.startStream();
+    } else {
+      this.startPolling();
+    }
+  }
+
+  private startStream() {
+    if (this.streamSubscription) return;
+    if (!this.options.eventStream) {
+      this.startPolling();
+      return;
+    }
+    this.streamSubscription = this.options.eventStream.createSubscription();
+    this.streamTask = this.consumeStream(this.streamSubscription);
+  }
+
+  private startPolling() {
+    if (this.timer) return;
+    const interval = this.options.intervalMs ?? 5_000;
+    this.timer = setInterval(() => this.poll(), interval);
+  }
+
   private async consumeStream(subscription: TickStreamSubscription) {
     const parser = this.options.eventStream?.parseEvent ?? defaultEventParser;
     try {
@@ -86,9 +110,36 @@ export class TickWatcher {
         this.streamTask = null;
       }
       if (this.options.eventStream && !this.timer) {
-        const interval = this.options.intervalMs ?? 5_000;
-        this.timer = setInterval(() => this.poll(), interval);
+        this.startPolling();
       }
+    }
+  }
+
+  private async initializeLastTick() {
+    let latest: number | undefined;
+    if (this.options.latestTickProvider) {
+      try {
+        latest = await this.options.latestTickProvider();
+      } catch (error) {
+        console.warn('TickWatcher latestTickProvider failed', error);
+      }
+    }
+    if (typeof latest !== 'number') {
+      try {
+        const response = await this.archiveClient.getLatestTick();
+        latest = response.tickNumber;
+      } catch (error) {
+        console.warn('TickWatcher getLatestTick failed', error);
+        try {
+          const status = await this.archiveClient.getStatus();
+          latest = status.lastProcessedTick?.tickNumber;
+        } catch (statusError) {
+          console.warn('TickWatcher getStatus fallback failed', statusError);
+        }
+      }
+    }
+    if (typeof latest === 'number' && latest > 0) {
+      this.lastTick = latest - 1;
     }
   }
 

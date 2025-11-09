@@ -7,10 +7,5 @@
     "declarationMap": true,
     "noEmit": true,
     "baseUrl": ".",
-    "paths": {
-      "@qubickit/sdk": ["src/index.ts"],
-      "@qubickit/sdk/*": ["src/*"]
-    }
   },
-  "include": ["src", "tsup.config.ts", "vitest.config.ts", "types/**/*.d.ts"]
 }

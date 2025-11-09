@@ -1,0 +1,147 @@
+---
+title: "Wallets & Sessions"
+description: "Manage encrypted profiles, session tokens, and multi-wallet limits."
+icon: Key
+cta:
+  label: "View Wallet APIs"
+  href: "#walletmanager-recap"
+---
+
+## WalletManager recap
+
+```ts
+import { createQubicSdk } from '@qubickit/sdk';
+
+const sdk = createQubicSdk();
+const profile = await sdk.wallet.createProfile({
+  seed: process.env.QUBIC_SEED!,
+  passphrase: process.env.QUBIC_PASSPHRASE!,
+  label: 'cli'
+});
+
+await sdk.wallet.addAccount({
+  profileId: profile.profileId,
+  passphrase: process.env.QUBIC_PASSPHRASE!,
+  derivationIndex: 1,
+  label: 'secondary'
+});
+```
+
+Every profile is stored through the configured storage adapter (in-memory by default). Seeds are encrypted via AES-GCM using the passphrase you provide.
+
+### Encryption & export
+
+```ts
+const profile = await sdk.wallet.getProfile(profileId);
+const decrypted = await sdk.wallet.unlockSeed(profileId, passphrase);
+// export decrypted string to hardware vault / offline storage
+```
+
+`unlockSeed` is the only method that ever returns a seed as plaintext—wrap it in your own secrets manager or hardware-backed vault if you need long-term backups.
+
+## Session tokens
+
+```ts
+const token = await sdk.wallet.issueSessionToken({
+  profileId: profile.profileId,
+  passphrase: process.env.QUBIC_PASSPHRASE!,
+  derivationIndex: 0
+});
+
+const session = await sdk.wallet.resumeSession(token.token);
+console.log(session.identityPackage.identity);
+```
+
+Session tokens keep identity packages (private/public key material) in memory so the web/CLI layers can reuse them without handling raw seeds.
+
+## MultiWalletManager
+
+Phase 3 introduces shared limits and orchestration across many profiles:
+
+```ts
+const multi = sdk.multiWallet;
+
+multi.setLimit({
+  profileId: profile.profileId,
+  maxTransfersPerMinute: 5,
+  maxAmount: 100_000
+});
+
+multi.enforceLimit(profile.profileId, 10_000); // throws once limits are exceeded
+```
+
+Use `sdk.multiWallet.listLimits()` to display the current policy in dashboards or audit logs.
+
+Combine `multiWallet` with the transfer queue to enforce org-wide budgets:
+
+```ts
+multi.enforceLimit(profile.profileId, Number(request.amount));
+await sdk.transfers.send(request);
+```
+
+If the limit throws, you can enqueue the job for approval or delay it until the next window using the built-in `CommandQueue`.
+
+## Storage adapters
+
+- **Memory** – default, great for tests.
+- **File** – persist profiles on disk (server/CLI).
+- **IndexedDB** – browser-friendly persistence.
+- **Secure** – wraps any adapter and encrypts payloads with a passphrase (handy when writing to disk/IDB).
+
+All adapters share the same `StorageAdapter<T>` interface, so you can swap them when constructing `createQubicSdk({ storage })`.
+
+## SessionClient helpers
+
+Beyond the low-level wallet manager, the session client exposes cache-aware APIs for balances, transactions, and watchers:
+
+```ts
+const session = sdk.createSessionClient({ defaultCacheTtlMs: 2_000 });
+const { transactions } = await session.listTransactions(identity, { limit: 50 });
+const transfers = session.watchTransfers(identity, { intervalMs: 2_000 });
+```
+
+- `watchTransfers`, `watchBalance`, and `watchContract` wrap the same watcher primitives under the hood.
+- `withWalletSession(token, handler)` unlocks the identity package for the duration of the callback, so you can sign transactions without copying secrets around.
+- **Approvals/roles** – fan out session tokens per role (viewer, operator) and share them between CLI and UI surfaces.
+- **MFA** – require a human to unlock the seed (via `unlockSeed`) before issuing new session tokens.
+- **Audit** – use `listProfiles()` / `multiWallet.listLimits()` to build dashboards that show who can spend what.
+
+## Wallet & session types
+
+### `WalletManagerOptions`
+
+<auto-type-table path="../../../../../packages/sdk/src/wallet/manager.ts" name="WalletManagerOptions" />
+
+### Profile inputs
+
+<auto-type-table path="../../../../../packages/sdk/src/wallet/manager.ts" name="CreateProfileInput" />
+
+### Additional accounts
+
+<auto-type-table path="../../../../../packages/sdk/src/wallet/manager.ts" name="AddAccountInput" />
+
+### Session tokens
+
+<auto-type-table path="../../../../../packages/sdk/src/wallet/manager.ts" name="IssueSessionOptions" />
+
+### Session handles
+
+<auto-type-table path="../../../../../packages/sdk/src/wallet/manager.ts" name="WalletSessionHandle" />
+
+### Multi-wallet limits
+
+<auto-type-table path="../../../../../packages/sdk/src/wallet/multi-wallet-manager.ts" name="SharedLimit" />
+
+### MultiWalletManager options
+
+<auto-type-table path="../../../../../packages/sdk/src/wallet/multi-wallet-manager.ts" name="MultiWalletManagerOptions" />
+
+### Session client options
+
+<auto-type-table path="../../../../../packages/sdk/src/session/client.ts" name="SessionClientOptions" />
+
+### Session list/polling helpers
+
+<auto-type-table path="../../../../../packages/sdk/src/session/client.ts" name="TransactionListOptions" />
+
+<auto-type-table path="../../../../../packages/sdk/src/session/client.ts" name="SessionRequestTelemetry" />

@@ -1,0 +1,76 @@
+---
+title: "Telemetry & Sync"
+description: "Instrument the SDK, collect metrics, and run background sync cycles."
+icon: Activity
+cta:
+  label: "Configure Telemetry"
+  href: "#logger-metrics-hooks"
+---
+
+## Logger & metrics hooks
+
+```ts
+const sdk = createQubicSdk({
+  logger: {
+    info: (msg, ctx) => myLogger.info({ msg, ...ctx })
+  },
+  metrics: {
+    record: (metric, value, tags) => statsd.increment(metric, value, tags)
+  }
+});
+
+sdk.telemetry.logger.info('sdk ready');
+sdk.telemetry.metrics.record('sdk.init', 1);
+```
+
+Every core component (transfers, sync daemon, wallet manager) reports through these hooks, so you can stream events into whatever observability pipeline you already use.
+
+## Sync daemon
+
+```ts
+const sync = sdk.sync;
+sync.start(); // begins syncing the configured identities (see createQubicSdk options)
+
+process.on('SIGINT', () => sync.stop());
+```
+
+Provide identities + interval via `createQubicSdk({ sync: { intervalMs, identities } })` to keep caches warm without writing timers yourself. Sync metrics (`sync.identity.ok`, `sync.identity.error`, `sync.cycle.duration`) are emitted for every run.
+
+## Typed SDK errors
+
+All public APIs throw `QubicSdkError` derivatives:
+
+```ts
+try {
+  await sdk.transfers.send(...);
+} catch (error) {
+  if (error instanceof QubicSdkError) {
+    console.error(error.code, error.remediation, error.context);
+  }
+}
+```
+
+`WalletError`, `WalletLimitError`, `TransferError`, and `SyncError` attach remediation hints so CLIs/UIs can present actionable messaging instead of raw stack traces. When you layer your own telemetry on top of the SDK, log `error.code` and `error.context` to quickly group incidents.
+
+## Background sync recipes
+
+```ts
+const identities = await sdk.wallet.listProfiles().then((profiles) => profiles.flatMap((p) => p.accounts.map((acc) => acc.identity)));
+sdk.sync.start();
+```
+
+Provide the sync daemon with a list of identities (wallets, contracts, treasuries) to keep the caches warm. Combine this with the metrics logger to emit `sync.identity.ok/error` counters to your monitoring stack and trigger alerts when background refresh stalls.
+
+## Type reference
+
+### `SdkLogger`
+
+<auto-type-table path="../../../../../packages/sdk/src/telemetry/logger.ts" name="SdkLogger" />
+
+### `MetricsRecorder`
+
+<auto-type-table path="../../../../../packages/sdk/src/telemetry/metrics.ts" name="MetricsRecorder" />
+
+### `SyncDaemonOptions`
+
+<auto-type-table path="../../../../../packages/sdk/src/sync/sync-daemon.ts" name="SyncDaemonOptions" />
