@@ -1,6 +1,4 @@
-import { createCoreTransports, MemoryLRUCache } from '@qubickit/core';
-
-
+import { HttpClient, MemoryLRUCache } from '@qubickit/core';
 export interface TransportInspectCommandOptions {
   host?: string;
   fallback?: string[];
@@ -41,8 +39,11 @@ export async function runTransportInspectCommand(rawOptions: TransportInspectCom
   const probePath = rawOptions.path ?? '/v1/status';
   const probeCount = toNumber(rawOptions.requests, 1, 'requests', { min: 0 });
   const shouldProbe = rawOptions.probe !== false && probeCount > 0;
-
-  const {http} = createCoreTransports({
+  const http = new HttpClient({
+    baseUrl: host,
+    fallbackHosts,
+    cache: new MemoryLRUCache(cacheSize),
+    requestHistorySize: Math.max(cacheSize, 50)
   });
 
   if (shouldProbe) {

@@ -108,9 +108,8 @@ async function iterateChannel<T>(
   maxItems?: number,
   renderer?: (value: T) => void
 ) {
-  const detach = attachInterrupt(() => {
+  const interrupt = attachInterrupt(() => {
     stop();
-    process.exit(0);
   });
   let seen = 0;
   try {
@@ -131,24 +130,34 @@ async function iterateChannel<T>(
       if (maxItems && seen >= maxItems) {
         break;
       }
+      if (interrupt.isInterrupted()) {
+        break;
+      }
     }
   } finally {
     stop();
-    detach();
+    interrupt.detach();
   }
 }
 
 function attachInterrupt(handler: () => void) {
+  let interrupted = false;
   const wrapped = () => {
     logVerbose('Interrupt signal received, stopping watcher.');
     console.log('\nStopping watcher...');
+    interrupted = true;
     handler();
   };
   process.once('SIGINT', wrapped);
   process.once('SIGTERM', wrapped);
-  return () => {
-    process.off('SIGINT', wrapped);
-    process.off('SIGTERM', wrapped);
+  return {
+    detach() {
+      process.off('SIGINT', wrapped);
+      process.off('SIGTERM', wrapped);
+    },
+    isInterrupted() {
+      return interrupted;
+    }
   };
 }
 

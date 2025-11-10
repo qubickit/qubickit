@@ -193,7 +193,12 @@ function registerWalletCommands(root: Command) {
     .option('--json', 'Output JSON')
     .action(resumeSessionCommand);
 
-  wallet.command('balances').description('List balances for every stored account.').option('--json', 'Output JSON').action(listWalletBalancesCommand);
+  wallet
+    .command('balances')
+    .description('List balances for every stored account.')
+    .option('--json', 'Output JSON')
+    .option('--concurrency <number>', 'Number of concurrent balance fetches (default 3)')
+    .action(listWalletBalancesCommand);
 }
 
 function registerTransferCommands(root: Command) {

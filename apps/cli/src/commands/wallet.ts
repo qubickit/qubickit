@@ -12,6 +12,10 @@ interface WalletListOptions {
   json?: boolean;
 }
 
+interface WalletBalanceOptions extends WalletListOptions {
+  concurrency?: string | number;
+}
+
 interface CreateProfileOptions extends WalletListOptions {
   seed?: string;
   random?: boolean;
@@ -65,7 +69,7 @@ interface UpdateProfileOptions extends WalletListOptions {
   clearMetadata?: boolean;
 }
 
-export async function listWalletBalancesCommand(options: WalletListOptions) {
+export async function listWalletBalancesCommand(options: WalletBalanceOptions) {
   const ctx = await createContext();
   const profiles = await ctx.sdk.wallet.listProfiles();
   if (!profiles.length) {
@@ -73,29 +77,59 @@ export async function listWalletBalancesCommand(options: WalletListOptions) {
     return;
   }
   const session = ctx.sdk.createSessionClient();
-  const rows = [];
-  for (const profile of profiles) {
-    for (const account of profile.accounts) {
-      const label = account.label ?? account.accountId;
-      const identity = account.accountId;
-      const response = (await withSpinner(`Fetching balance for ${label}`, async () =>
-        session.getBalance(identity, { cacheTtlMs: 0 })
-      )) as CliBalanceResponse;
-      rows.push({
-        profile: profile.label ?? profile.profileId,
-        account: label,
-        identity,
-        balance: formatBalanceSummary(response.balance),
-        incoming: formatAmount(response.balance, 'incomingAmount'),
-        outgoing: formatAmount(response.balance, 'outgoingAmount')
-      });
-    }
+  const jobs = profiles.flatMap((profile) => profile.accounts.map((account) => ({ profile, account })));
+  if (!jobs.length) {
+    logInfo('No accounts found. Use `wallet accounts:add` to create one.');
+    return;
   }
+  const concurrency = parseInteger(options.concurrency, 'concurrency', { min: 1, max: 10 }) ?? 3;
+  const useSpinner = concurrency === 1;
+
+  const rows = await runWithConcurrency(jobs, concurrency, async ({ profile, account }) => {
+    const label = account.label ?? account.accountId;
+    const identity = account.accountId;
+    const fetchBalance = async () =>
+      (await session.getBalance(identity, { cacheTtlMs: 0 })) as CliBalanceResponse;
+
+    const response = useSpinner
+      ? await withSpinner(`Fetching balance for ${label}`, fetchBalance)
+      : await fetchBalance();
+
+    return {
+      profile: profile.label ?? profile.profileId,
+      account: label,
+      identity,
+      balance: formatBalanceSummary(response.balance),
+      incoming: formatAmount(response.balance, 'incomingAmount'),
+      outgoing: formatAmount(response.balance, 'outgoingAmount')
+    };
+  });
+
   if (options.json) {
     printJson(rows);
   } else {
     printTable(rows);
   }
+}
+
+async function runWithConcurrency<T, TResult>(
+  items: T[],
+  limit: number,
+  handler: (item: T, index: number) => Promise<TResult>
+): Promise<TResult[]> {
+  const results: TResult[] = new Array(items.length);
+  let cursor = 0;
+  const worker = async () => {
+    while (true) {
+      const current = cursor;
+      cursor += 1;
+      if (current >= items.length) break;
+      results[current] = await handler(items[current]!, current);
+    }
+  };
+  const poolSize = Math.min(limit, items.length);
+  await Promise.all(Array.from({ length: poolSize }, () => worker()));
+  return results;
 }
 
 export async function listWalletProfilesCommand(options: WalletListOptions) {
