@@ -1,22 +1,31 @@
 import { HttpClient } from '../transport/http-client';
 import {
   BalanceResponseSchema,
-  BroadcastTransactionResponseSchema
+  BroadcastTransactionResponseSchema,
+  QuerySmartContractResponseSchema,
+  TickInfoResponseSchema,
+  type BalanceResponse,
+  type BroadcastTransactionResponse,
+  type QuerySmartContractResponse,
+  type TickInfoResponse
 } from '../models/http-schemas';
 import {
   AssetIssuancesSchema,
   AssetOwnershipsSchema,
   AssetPossessionsSchema,
-  AssetsByIdentitySchema
+  AssetsByIdentitySchema,
+  type AssetIssuancesResponse,
+  type AssetOwnershipsResponse,
+  type AssetPossessionsResponse,
+  type AssetsByIdentityResponse
 } from '../models/assets-schemas';
 import { identitySchema } from '../models/shared-schemas';
-import { z } from 'zod';
 import { parseWithSchema } from '../utils/validation';
 
 export class HttpApiClient {
   constructor(private readonly http: HttpClient) {}
 
-  async getBalance(identity: string, options: { useCache?: boolean } = {}) {
+  async getBalance(identity: string, options: { useCache?: boolean } = {}): Promise<BalanceResponse> {
     identitySchema.parse(identity);
     const response = await this.http.request({
       path: `/v1/balances/${identity}`,
@@ -25,7 +34,7 @@ export class HttpApiClient {
     return parseWithSchema(BalanceResponseSchema, response);
   }
 
-  async broadcastTransaction(encodedTransaction: string) {
+  async broadcastTransaction(encodedTransaction: string): Promise<BroadcastTransactionResponse> {
     const response = await this.http.request({
       path: `/v1/broadcast-transaction`,
       method: 'POST',
@@ -34,12 +43,12 @@ export class HttpApiClient {
     return parseWithSchema(BroadcastTransactionResponseSchema, response);
   }
 
-  async getAssetIssuances() {
+  async getAssetIssuances(): Promise<AssetIssuancesResponse> {
     const response = await this.http.request({ path: `/v1/assets/issuances`, useCache: true });
     return parseWithSchema(AssetIssuancesSchema, response);
   }
 
-  async getAssetOwnerships(assetName: string, issuerIdentity?: string) {
+  async getAssetOwnerships(assetName: string, issuerIdentity?: string): Promise<AssetOwnershipsResponse> {
     const response = await this.http.request({
       path: `/v1/assets/ownerships`,
       query: { name: assetName, issuer: issuerIdentity },
@@ -48,7 +57,7 @@ export class HttpApiClient {
     return parseWithSchema(AssetOwnershipsSchema, response);
   }
 
-  async getAssetPossessions(assetName: string, issuerIdentity?: string) {
+  async getAssetPossessions(assetName: string, issuerIdentity?: string): Promise<AssetPossessionsResponse> {
     const response = await this.http.request({
       path: `/v1/assets/possessions`,
       query: { name: assetName, issuer: issuerIdentity },
@@ -57,7 +66,7 @@ export class HttpApiClient {
     return parseWithSchema(AssetPossessionsSchema, response);
   }
 
-  async getAssetsByIdentity(identity: string) {
+  async getAssetsByIdentity(identity: string): Promise<AssetsByIdentityResponse> {
     identitySchema.parse(identity);
     const response = await this.http.request({
       path: `/v1/assets/${identity}/owned`,
@@ -66,11 +75,9 @@ export class HttpApiClient {
     return parseWithSchema(AssetsByIdentitySchema, response);
   }
 
-  async getTickInfo() {
+  async getTickInfo(): Promise<TickInfoResponse> {
     const response = await this.http.request({ path: `/v1/tick-info`, useCache: true });
-    return z.object({
-      tickInfo: z.object({ tick: z.number().optional(), epoch: z.number().optional() })
-    }).parse(response);
+    return parseWithSchema(TickInfoResponseSchema, response);
   }
 
   async querySmartContract(body: {
@@ -78,12 +85,12 @@ export class HttpApiClient {
     inputType?: number;
     inputSize?: number;
     requestData?: string;
-  }) {
+  }): Promise<QuerySmartContractResponse> {
     const response = await this.http.request({
       path: `/v1/querySmartContract`,
       method: 'POST',
       body
     });
-    return z.object({ responseData: z.string().optional() }).parse(response);
+    return parseWithSchema(QuerySmartContractResponseSchema, response);
   }
 }

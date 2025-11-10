@@ -5,7 +5,14 @@ import { createMemoryStorageAdapter, type StorageAdapter } from '../adapters';
 import { decryptSecretAsString, encryptSecret, type EncryptedPayload } from '../crypto/secret-box';
 import { assertNotAborted } from '../internal/abort';
 import { randomUUID } from '../internal/random';
-import { WalletAccountSchema, WalletProfileSchema, type WalletAccount, type WalletProfile, SeedSchema } from './schemas';
+import {
+  WalletAccountSchema,
+  WalletProfileSchema,
+  type WalletAccount,
+  type WalletProfile,
+  SeedSchema,
+  ProfileMetadataSchema
+} from './schemas';
 import { WalletError } from '../errors/sdk-error';
 
 const CreateProfileInputSchema = z.object({
@@ -14,7 +21,8 @@ const CreateProfileInputSchema = z.object({
   seed: SeedSchema,
   passphrase: z.string().min(4),
   derivationIndex: z.number().int().nonnegative().default(0),
-  accountLabel: z.string().min(1).optional()
+  accountLabel: z.string().min(1).optional(),
+  metadata: ProfileMetadataSchema.optional()
 });
 
 const AddAccountSchema = z.object({
@@ -22,6 +30,13 @@ const AddAccountSchema = z.object({
   passphrase: z.string().min(4),
   derivationIndex: z.number().int().nonnegative(),
   label: z.string().min(1).optional()
+});
+
+const UpdateProfileInputSchema = z.object({
+  profileId: z.string().min(1),
+  label: z.string().min(1).optional(),
+  metadata: ProfileMetadataSchema.optional(),
+  mergeMetadata: z.boolean().optional()
 });
 
 const SessionTokenOptionsSchema = z.object({
@@ -35,6 +50,7 @@ const SessionTokenOptionsSchema = z.object({
 export type CreateProfileInput = z.input<typeof CreateProfileInputSchema>;
 export type AddAccountInput = z.input<typeof AddAccountSchema>;
 export type IssueSessionOptions = z.input<typeof SessionTokenOptionsSchema>;
+export type UpdateProfileInput = z.input<typeof UpdateProfileInputSchema>;
 
 export interface WalletSessionHandle {
   token: string;
@@ -84,7 +100,8 @@ export class WalletManager {
       createdAt: now,
       updatedAt: now,
       encryptedSeed,
-      accounts: [account]
+      accounts: [account],
+      metadata: payload.metadata ?? {}
     };
     await this.storage.write(profile.profileId, profile);
     return profile;
@@ -121,6 +138,27 @@ export class WalletManager {
     profile.updatedAt = this.clock();
     await this.storage.write(profile.profileId, profile);
     return account;
+  }
+
+  async updateProfile(input: UpdateProfileInput): Promise<WalletProfile> {
+    const payload = UpdateProfileInputSchema.parse(input);
+    const profile = await this.requireProfile(payload.profileId);
+    if (payload.label !== undefined) {
+      profile.label = payload.label;
+    }
+    if (payload.metadata !== undefined) {
+      if (payload.mergeMetadata === false) {
+        profile.metadata = payload.metadata;
+      } else {
+        profile.metadata = {
+          ...(profile.metadata ?? {}),
+          ...payload.metadata
+        };
+      }
+    }
+    profile.updatedAt = this.clock();
+    await this.storage.write(profile.profileId, profile);
+    return profile;
   }
 
   async unlockSeed(profileId: string, passphrase: string): Promise<string> {

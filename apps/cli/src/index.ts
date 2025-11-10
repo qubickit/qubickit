@@ -16,7 +16,8 @@ import {
   listWalletProfilesCommand,
   removeWalletProfileCommand,
   resumeSessionCommand,
-  listWalletBalancesCommand
+  listWalletBalancesCommand,
+  updateWalletProfileCommand
 } from './commands/wallet';
 import {
   listContractsCommand,
@@ -126,12 +127,26 @@ function registerWalletCommands(root: Command) {
     .command('create')
     .description('Create a new wallet profile by encrypting a seed.')
     .option('--seed <seed>', 'Seed (defaults to QUBIC_SEED env)')
+    .option('--random', 'Generate a random seed (overrides --seed)')
     .option('--passphrase <pass>', 'Passphrase (defaults to QUBIC_WALLET_PASSPHRASE or prompt)')
     .option('--label <label>', 'Profile label')
     .option('--account-label <label>', 'Initial account label')
     .option('--derivation-index <index>', 'Initial account derivation index', Number, 0)
+    .option('--metadata <key=value>', 'Metadata entry (repeatable)', collectArgOption, [])
+    .option('--metadata-file <path>', 'Path to JSON metadata file')
     .option('--json', 'Output JSON')
     .action(createWalletProfileCommand);
+  profiles
+    .command('update')
+    .description('Update profile label and metadata.')
+    .option('--profile-id <id>', 'Profile id')
+    .option('--label <label>', 'New label')
+    .option('--metadata <key=value>', 'Metadata entry (repeatable)', collectArgOption, [])
+    .option('--metadata-file <path>', 'Path to JSON metadata file')
+    .option('--replace-metadata', 'Replace metadata instead of merging')
+    .option('--clear-metadata', 'Remove all metadata before applying updates')
+    .option('--json', 'Output JSON')
+    .action(updateWalletProfileCommand);
   profiles
     .command('inspect')
     .description('Inspect a specific profile and its accounts.')
@@ -199,6 +214,7 @@ function registerTransferCommands(root: Command) {
       .option('--input-encoding <encoding>', 'Payload encoding base64|hex|utf8', 'base64')
       .option('--input-type <id>', 'Input type override', Number)
       .option('--tick <number>', 'Tick override', Number)
+      .option('--tick-offset <number>', 'Number of ticks to add when auto-selecting the target tick', Number)
       .option('--procedure-id <id>', 'Procedure id metadata', Number)
       .option('--dry-run', 'Skip broadcast and only sign')
       .option('--no-monitor', 'Skip settlement monitoring')

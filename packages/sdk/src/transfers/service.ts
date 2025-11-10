@@ -31,6 +31,7 @@ export type TransferSigner = TransferSignerSeed | TransferSignerSession;
 
 export interface TransferMetadata {
   tickNumber?: number;
+  tickOffset?: number;
   timeLock?: Uint8Array;
   varStruct?: Uint8Array;
   procedureId?: number;
@@ -69,10 +70,12 @@ export interface TransferResult {
 
 export interface TransferServiceOptions {
   persistence?: PersistenceAdapter<CommandRecord<TransferRequest>>;
+  defaultTickOffset?: number;
 }
 
 export class TransferService {
   private readonly queue: CommandQueue<TransferRequest>;
+  private readonly defaultTickOffset: number;
 
   constructor(private readonly sdk: QubicSdk, options: TransferServiceOptions = {}) {
     const persistence =
@@ -81,6 +84,7 @@ export class TransferService {
     this.queue = new CommandQueue({
       persistence
     });
+    this.defaultTickOffset = Math.max(0, options.defaultTickOffset ?? 10);
   }
 
   getQueue() {
@@ -91,7 +95,7 @@ export class TransferService {
     destinationSchema.parse(request.destination);
     const signer = await this.resolveSigner(request.signer);
     const destinationPublicKey = identityToPublicKey(request.destination);
-    const tickNumber = request.metadata?.tickNumber ?? (await this.sdk.core.archive.getLatestTick()).latestTick ?? 0;
+    const tickNumber = await this.resolveTickNumber(request);
     const normalizedAmount = BigInt(normalizeAmount(request.amount));
 
     const unsignedBytes = buildUnsignedTransaction({
@@ -146,6 +150,17 @@ export class TransferService {
       monitor: request.monitor ?? true,
       queryClient: this.sdk.core.query
     });
+  }
+
+  private async resolveTickNumber(request: TransferRequest): Promise<number> {
+    if (typeof request.metadata?.tickNumber === 'number') {
+      return request.metadata.tickNumber;
+    }
+    const latest = await this.sdk.core.archive.getLatestTick();
+    const latestTick = typeof latest?.tickNumber === 'number' ? latest.tickNumber : 0;
+    const offset = request.metadata?.tickOffset;
+    const effectiveOffset = Math.max(0, offset ?? this.defaultTickOffset);
+    return latestTick + effectiveOffset;
   }
 
   private async resolveSigner(signer: TransferSigner): Promise<{ identityPackage: WalletSessionHandle['identityPackage'] }> {

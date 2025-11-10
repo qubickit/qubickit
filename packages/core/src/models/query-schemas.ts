@@ -17,6 +17,7 @@ export const QueryTransactionSchema = z.object({
 export const TransactionByHashResponseSchema = z.object({
   transaction: QueryTransactionSchema.optional()
 });
+export type TransactionByHashResponse = z.infer<typeof TransactionByHashResponseSchema>;
 
 export const TransactionsForIdentitySchema = z.object({
   validForTick: z.number().optional(),
@@ -29,3 +30,4 @@ export const TransactionsForIdentitySchema = z.object({
     .optional(),
   transactions: z.array(QueryTransactionSchema)
 });
+export type TransactionsForIdentityResponse = z.infer<typeof TransactionsForIdentitySchema>;

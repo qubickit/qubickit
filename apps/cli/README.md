@@ -24,12 +24,12 @@ bun add -g @qubickit/cli
 | --- | --- |
 | `transport inspect` | Inspect HTTP diagnostics, retry/circuit status, and recent requests (spinner-backed). |
 | `watch ticks|balance|transfers|contracts` | Stream live events using the SDK watchers; verbose mode prints payload details. |
-| `wallet profiles list/create/inspect/remove/export` | Interactive profile management (prompts for seeds, passphrases, confirmation). |
+| `wallet profiles list/create/update/inspect/remove/export` | Interactive profile management (prompts for seeds, passphrases, metadata updates). |
 | `wallet accounts add` | Derive additional accounts with progress spinners. |
 | `wallet sessions issue/resume` | Issue or resume encrypted session tokens. |
 | `wallet balances` | Fetch live balances for every stored account (with per-account spinners). |
 | `session balance/history` | Pull one-off balance snapshots or list recent transactions via the session client. |
-| `transfer send`, `transfer queue:resume` | Draft/broadcast transfers and resume the persistence-backed queue. |
+| `transfer send`, `transfer queue:resume` | Draft/broadcast transfers (auto targets latest tick +10 unless `--tick`/`--tick-offset` overrides) and resume the persistence-backed queue. |
 | `contracts list/describe/call/invoke` | Inspect registry metadata (functions/procedures), run read-only calls (with optional `--decode`), or invoke procedures. |
 | `status network` | Fetch latest tick + node health for quick diagnostics. |
 
@@ -51,6 +51,10 @@ qk transport inspect --host https://rpc.qubic.org --requests 3
 QUBIC_SEED=aaaa... \
 QUBIC_WALLET_PASSPHRASE=secret \
   qk wallet profiles create --label "treasury"
+# or let the CLI generate a random seed for you
+qk wallet profiles create --random --passphrase secret --label "lab"
+# update metadata/label after creation
+qk wallet profiles update --profile-id <profile> --label "Treasury" --metadata env=prod --metadata region=eu
 qk wallet accounts add --profile-id <profile> --derivation-index 1
 
 # stream transfers for an identity

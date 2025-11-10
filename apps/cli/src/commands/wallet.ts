@@ -1,10 +1,12 @@
+import { randomBytes } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { createContext } from '../context';
 import { promptConfirm, promptInput } from '../utils/io';
 import { logInfo, logSuccess, printJson, printTable, logWarn } from '../utils/output';
 import { parseInteger, parseString } from '../utils/parsers';
 import { selectAccount, selectProfile } from '../utils/selectors';
 import { withSpinner } from '../utils/spinner';
-import type { CliBalancePayload } from '../utils/balance';
+import type { CliBalancePayload, CliBalanceResponse } from '../utils/balance';
 
 interface WalletListOptions {
   json?: boolean;
@@ -12,10 +14,13 @@ interface WalletListOptions {
 
 interface CreateProfileOptions extends WalletListOptions {
   seed?: string;
+  random?: boolean;
   passphrase?: string;
   label?: string;
   accountLabel?: string;
   derivationIndex?: string | number;
+  metadata?: string[];
+  metadataFile?: string;
 }
 
 interface RemoveProfileOptions {
@@ -51,6 +56,15 @@ interface InspectProfileOptions extends WalletListOptions {
   profileId?: string;
 }
 
+interface UpdateProfileOptions extends WalletListOptions {
+  profileId?: string;
+  label?: string;
+  metadata?: string[];
+  metadataFile?: string;
+  replaceMetadata?: boolean;
+  clearMetadata?: boolean;
+}
+
 export async function listWalletBalancesCommand(options: WalletListOptions) {
   const ctx = await createContext();
   const profiles = await ctx.sdk.wallet.listProfiles();
@@ -64,9 +78,9 @@ export async function listWalletBalancesCommand(options: WalletListOptions) {
     for (const account of profile.accounts) {
       const label = account.label ?? account.accountId;
       const identity = account.accountId;
-      const response = await withSpinner(`Fetching balance for ${label}`, async () =>
+      const response = (await withSpinner(`Fetching balance for ${label}`, async () =>
         session.getBalance(identity, { cacheTtlMs: 0 })
-      );
+      )) as CliBalanceResponse;
       rows.push({
         profile: profile.label ?? profile.profileId,
         account: label,
@@ -103,21 +117,63 @@ export async function listWalletProfilesCommand(options: WalletListOptions) {
 
 export async function createWalletProfileCommand(options: CreateProfileOptions) {
   const ctx = await createContext();
-  const seed = await resolveInput('seed', options.seed ?? process.env.QUBIC_SEED);
+  const generatedSeed = options.random ? generateRandomSeed() : undefined;
+  if (generatedSeed && options.seed) {
+    logWarn('Ignoring provided seed because --random was used.');
+  }
+  const seed = generatedSeed ?? (await resolveInput('seed', options.seed ?? process.env.QUBIC_SEED));
   const passphrase = await resolveInput('passphrase', options.passphrase ?? process.env.QUBIC_WALLET_PASSPHRASE, true);
   const derivationIndex = parseInteger(options.derivationIndex, 'derivation index', { min: 0 }) ?? 0;
+  const metadata = await resolveMetadata(options.metadata, options.metadataFile);
   const profile = await withSpinner('Creating profile', async () =>
     ctx.sdk.wallet.createProfile({
       seed,
       passphrase,
       label: options.label,
       accountLabel: options.accountLabel,
-      derivationIndex
+      derivationIndex,
+      metadata
     })
   );
   logSuccess(`Profile ${profile.profileId} created with ${profile.accounts.length} account(s).`);
-  if (options.json) {
+  if (generatedSeed) {
+    if (options.json) {
+      printJson({ profile, seed: generatedSeed });
+    } else {
+      logWarn('Random seed generated. Store it securely:');
+      console.log(generatedSeed);
+    }
+  } else if (options.json) {
     printJson(profile);
+  }
+}
+
+export async function updateWalletProfileCommand(options: UpdateProfileOptions) {
+  const ctx = await createContext();
+  const profile = await selectProfile(ctx, options.profileId);
+  const metadata = options.clearMetadata ? {} : await resolveMetadata(options.metadata, options.metadataFile);
+  const mergeMetadata = options.clearMetadata ? false : options.replaceMetadata ? false : undefined;
+  if (options.label === undefined && metadata === undefined && !options.clearMetadata) {
+    logWarn('No updates provided. Use --label, --metadata, or --clear-metadata.');
+    return;
+  }
+  const updated = await withSpinner('Updating profile', async () =>
+    ctx.sdk.wallet.updateProfile({
+      profileId: profile.profileId,
+      label: options.label,
+      metadata,
+      mergeMetadata
+    })
+  );
+  logSuccess(`Profile ${updated.profileId} updated.`);
+  if (options.json) {
+    printJson(updated);
+  } else {
+    logInfo(`Label: ${updated.label ?? '-'}`);
+    if (updated.metadata && Object.keys(updated.metadata).length) {
+      console.log('Metadata:');
+      printTable(Object.entries(updated.metadata).map(([key, value]) => ({ key, value })));
+    }
   }
 }
 
@@ -226,6 +282,15 @@ export async function inspectWalletProfileCommand(options: InspectProfileOptions
       }))
     );
   }
+  if (profile.metadata && Object.keys(profile.metadata).length) {
+    console.log('\nMetadata');
+    printTable(
+      Object.entries(profile.metadata).map(([key, value]) => ({
+        key,
+        value
+      }))
+    );
+  }
 }
 
 const formatBalanceSummary = (balance?: CliBalancePayload) => {
@@ -254,4 +319,55 @@ async function resolveInput(label: string, value?: string, prompt = false): Prom
     return promptInput(`${label}: `);
   }
   throw new Error(`Missing required ${label}. Provide a flag or environment variable.`);
+}
+
+type MetadataMap = Record<string, string>;
+
+async function resolveMetadata(entries?: string[], filePath?: string): Promise<MetadataMap | undefined> {
+  const fileMetadata = await loadMetadataFile(filePath);
+  const inlineMetadata = parseMetadataEntries(entries);
+  if (!fileMetadata && !inlineMetadata) {
+    return undefined;
+  }
+  return {
+    ...(fileMetadata ?? {}),
+    ...(inlineMetadata ?? {})
+  };
+}
+
+function parseMetadataEntries(entries?: string[]): MetadataMap | undefined {
+  if (!entries || !entries.length) return undefined;
+  return entries.reduce<MetadataMap>((acc, entry) => {
+    const [key, ...rest] = entry.split('=');
+    if (!key || !rest.length) {
+      throw new Error(`Invalid metadata entry "${entry}". Use key=value format.`);
+    }
+    acc[key.trim()] = rest.join('=').trim();
+    return acc;
+  }, {});
+}
+
+async function loadMetadataFile(filePath?: string): Promise<MetadataMap | undefined> {
+  if (!filePath) return undefined;
+  const data = JSON.parse(await readFile(filePath, 'utf8'));
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error('Metadata file must contain a JSON object.');
+  }
+  return Object.entries(data as Record<string, unknown>).reduce<MetadataMap>((acc, [key, value]) => {
+    acc[key] = typeof value === 'string' ? value : String(value);
+    return acc;
+  }, {});
+}
+
+const SEED_LENGTH = 55;
+const SEED_ALPHABET = 'abcdefghijklmnopqrstuvwxyz';
+
+function generateRandomSeed(): string {
+  const bytes = randomBytes(SEED_LENGTH);
+  let seed = '';
+  for (let i = 0; i < SEED_LENGTH; i += 1) {
+    const index = bytes.at(i);
+    seed += SEED_ALPHABET[(index ?? 0) % SEED_ALPHABET.length];
+  }
+  return seed;
 }

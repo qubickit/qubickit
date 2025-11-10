@@ -67,6 +67,13 @@ export interface RequestOptions<TBody = unknown> {
   useCache?: boolean;
 }
 
+const createFetchWrapper = (impl?: typeof fetch): typeof fetch => {
+  const base = impl ?? fetch;
+  const wrapped = ((...args: Parameters<typeof fetch>) => base(...args)) as typeof fetch;
+  Object.assign(wrapped, base);
+  return wrapped;
+};
+
 export class HttpClient {
   private readonly fetchImpl: typeof fetch;
   private readonly retryAttempts: number;
@@ -80,7 +87,7 @@ export class HttpClient {
   private readonly historySize: number;
 
   constructor(private readonly options: HttpClientOptions) {
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.fetchImpl = createFetchWrapper(options.fetchImpl);
     this.retryAttempts = options.retry?.attempts ?? 2;
     this.retryDelay = options.retry?.delayMs ?? 250;
     this.hosts = [options.baseUrl, ...(options.fallbackHosts ?? [])];

@@ -13,13 +13,20 @@ export interface EventStreamOptions {
   onError?: (error: unknown) => void;
 }
 
+const createFetchWrapper = (impl?: typeof fetch): typeof fetch => {
+  const base = impl ?? fetch;
+  const wrapped = ((...args: Parameters<typeof fetch>) => base(...args)) as typeof fetch;
+  Object.assign(wrapped, base);
+  return wrapped;
+};
+
 export class EventStreamSubscription implements AsyncIterable<EventStreamMessage> {
   private closed = false;
   private controller = new AbortController();
   private readonly fetchImpl: typeof fetch;
 
   constructor(private readonly url: string, private readonly options: EventStreamOptions = {}) {
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.fetchImpl = createFetchWrapper(options.fetchImpl);
     if (options.signal) {
       options.signal.addEventListener('abort', () => this.close(), { once: true });
     }

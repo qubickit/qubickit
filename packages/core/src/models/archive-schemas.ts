@@ -15,6 +15,7 @@ export const TickDataResponseSchema = z.object({
     })
     .optional()
 });
+export type TickDataResponse = z.infer<typeof TickDataResponseSchema>;
 
 export const TransactionDataSchema = z.object({
   transaction: z
@@ -33,6 +34,7 @@ export const TransactionDataSchema = z.object({
   timestamp: z.string().optional(),
   moneyFlew: z.boolean().optional()
 });
+export type TransactionData = z.infer<typeof TransactionDataSchema>;
 
 export const TransactionResponseSchema = z.object({
   transactionData: TransactionDataSchema.optional(),
@@ -40,11 +42,13 @@ export const TransactionResponseSchema = z.object({
   timestamp: z.string().optional(),
   moneyFlew: z.boolean().optional()
 });
+export type TransactionResponse = z.infer<typeof TransactionResponseSchema>;
 
 export const TransactionStatusSchema = z.object({
   txId: z.string(),
   moneyFlew: z.boolean()
 });
+export type TransactionStatus = z.infer<typeof TransactionStatusSchema>;
 
 const TickRangeSchema = z.object({
   startTick: z.number().int().nonnegative(),
@@ -67,6 +71,7 @@ export const StatusSchema = z.object({
     .optional(),
   emptyTicksPerEpoch: z.record(z.number().int().nonnegative()).optional()
 });
+export type ArchiveStatus = z.infer<typeof StatusSchema>;
 
 export const LatestTickSchema = z
   .object({
@@ -85,3 +90,4 @@ export const LatestTickSchema = z
       epoch: epochValue === undefined ? undefined : typeof epochValue === 'string' ? Number(epochValue) : epochValue
     };
   });
+export type LatestTick = z.infer<typeof LatestTickSchema>;

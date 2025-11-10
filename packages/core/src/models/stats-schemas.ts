@@ -9,6 +9,7 @@ export const LatestStatsSchema = z.object({
     })
     .optional()
 });
+export type LatestStatsResponse = z.infer<typeof LatestStatsSchema>;
 
 export const RichListSchema = z.object({
   pagination: z
@@ -26,3 +27,4 @@ export const RichListSchema = z.object({
     )
     .optional()
 });
+export type RichListResponse = z.infer<typeof RichListSchema>;

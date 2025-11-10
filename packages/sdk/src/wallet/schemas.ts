@@ -29,13 +29,16 @@ export const WalletAccountSchema = z.object({
 
 export type WalletAccount = z.infer<typeof WalletAccountSchema>;
 
+export const ProfileMetadataSchema = z.record(z.string().min(1), z.string());
+
 export const WalletProfileSchema = z.object({
   profileId: z.string().min(1),
   label: z.string().min(1).optional(),
   createdAt: z.number().int().nonnegative(),
   updatedAt: z.number().int().nonnegative(),
   encryptedSeed: EncryptedSeedSchema,
-  accounts: z.array(WalletAccountSchema).default([])
+  accounts: z.array(WalletAccountSchema).default([]),
+  metadata: ProfileMetadataSchema.optional().default({})
 });
 
 export type WalletProfile = z.infer<typeof WalletProfileSchema>;

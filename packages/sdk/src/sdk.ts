@@ -14,7 +14,7 @@ import { SessionClient, type SessionClientOptions } from './session';
 import { WalletManager, type WalletManagerOptions } from './wallet';
 import { MultiWalletManager } from './wallet/multi-wallet-manager';
 import { createStaticContractRegistry, ContractRegistry, ContractService } from './contracts';
-import { TransferService } from './transfers';
+import { TransferService, type TransferServiceOptions } from './transfers';
 import {
   createBalanceWatcher,
   createTickStream,
@@ -45,6 +45,7 @@ export interface QubicSdkOptions extends CoreTransportOptions {
   wallet?: WalletManager | WalletManagerOptions;
   logger?: Partial<SdkLogger>;
   metrics?: Partial<MetricsRecorder>;
+  transfers?: TransferServiceOptions;
   sync?: {
     intervalMs?: number;
     identities?: string[];
@@ -88,6 +89,7 @@ const defaultSchema = z.unknown();
 
 export function createQubicSdk(options: QubicSdkOptions = {}): QubicSdk {
   const core = createQubicCore(options);
+
   const storage = options.storage ?? createMemoryStorageAdapter({ schema: defaultSchema, namespace: 'sdk-storage' });
   const cache = options.cache ?? createMemoryCacheAdapter({ schema: defaultSchema, namespace: 'sdk-cache' });
   const hooks = options.transportHooks ?? createTransportHooksRegistry();
@@ -112,12 +114,12 @@ export function createQubicSdk(options: QubicSdkOptions = {}): QubicSdk {
     }
   };
 
-  const transfers = new TransferService(base as unknown as QubicSdk);
+  const transfers = new TransferService(base as QubicSdk, options.transfers);
   const contractRegistry = createStaticContractRegistry();
-  const contractService = new ContractService(base as unknown as QubicSdk, contractRegistry, transfers);
+  const contractService = new ContractService(base as QubicSdk, contractRegistry, transfers);
   const multiWallet = new MultiWalletManager(wallet);
   const syncDaemon = new SyncDaemon(
-    new SessionClient(base as unknown as QubicSdk),
+    new SessionClient(base as QubicSdk),
     logger,
     metrics,
     options.sync

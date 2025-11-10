@@ -62,4 +62,28 @@ describe('WalletManager', () => {
     manager.invalidateSession(session.token);
     await expect(manager.resumeSession(session.token)).rejects.toThrow(/invalid/i);
   });
+
+  it('updates profile labels and metadata', async () => {
+    const manager = new WalletManager();
+    const profile = await manager.createProfile({ seed, passphrase, metadata: { env: 'dev' } });
+
+    await manager.updateProfile({
+      profileId: profile.profileId,
+      label: 'Renamed',
+      metadata: { region: 'eu' }
+    });
+
+    const renamed = await manager.getProfile(profile.profileId);
+    expect(renamed?.label).toBe('Renamed');
+    expect(renamed?.metadata).toEqual({ env: 'dev', region: 'eu' });
+
+    await manager.updateProfile({
+      profileId: profile.profileId,
+      metadata: { env: 'prod' },
+      mergeMetadata: false
+    });
+
+    const replaced = await manager.getProfile(profile.profileId);
+    expect(replaced?.metadata).toEqual({ env: 'prod' });
+  });
 });

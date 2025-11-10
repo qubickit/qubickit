@@ -4,7 +4,7 @@ import { logInfo, logVerbose, printJson } from '../utils/output';
 import { parseInteger } from '../utils/parsers';
 import { selectContract, selectIdentity } from '../utils/selectors';
 import type { TransferEvent } from '@qubickit/sdk/watchers';
-import { renderBalanceEvent } from '../utils/balance';
+import { renderBalanceEvent, type CliBalanceResponse } from '../utils/balance';
 
 interface WatchBaseOptions {
   json?: boolean;
@@ -154,7 +154,7 @@ function attachInterrupt(handler: () => void) {
 
 async function emitInitialBalanceSnapshot(ctx: CliContext, identity: string, asJson: boolean) {
   try {
-    const snapshot = await ctx.sdk.createSessionClient().getBalance(identity, { cacheTtlMs: 0 });
+    const snapshot = (await ctx.sdk.createSessionClient().getBalance(identity, { cacheTtlMs: 0 })) as CliBalanceResponse;
     logVerbose('[watch:balance] initial snapshot fetched');
     if (asJson) {
       printJson(snapshot);

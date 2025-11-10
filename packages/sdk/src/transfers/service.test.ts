@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { broadcastEncodedTransaction } from '@qubickit/core';
+import { broadcastEncodedTransaction, buildUnsignedTransaction } from '@qubickit/core';
 
 import type { QubicSdk } from '../sdk';
 import { createTransportHooksRegistry } from '../transport/hooks';
@@ -38,7 +38,7 @@ const createSdk = () =>
         getBalance: vi.fn()
       },
       archive: {
-        getLatestTick: vi.fn().mockResolvedValue({ latestTick: 1 }),
+        getLatestTick: vi.fn().mockResolvedValue({ tickNumber: 1 }),
         getTransactionStatus: vi.fn().mockResolvedValue({ moneyFlew: true })
       },
       query: {
@@ -84,5 +84,52 @@ describe('TransferService', () => {
     });
     expect(result.status).toBe('settled');
     expect(broadcastEncodedTransaction).toHaveBeenCalled();
+  });
+
+  it('applies default tick offset when none provided', async () => {
+    const sdk = createSdk();
+    sdk.core.archive.getLatestTick = vi.fn().mockResolvedValue({ tickNumber: 100 });
+    const service = new TransferService(sdk, { defaultTickOffset: 5 });
+    await service.send({
+      destination,
+      amount: 1,
+      signer: { seed },
+      dryRun: true
+    });
+    expect(buildUnsignedTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ tick: 105 })
+    );
+  });
+
+  it('allows overriding tick offset per request', async () => {
+    const sdk = createSdk();
+    sdk.core.archive.getLatestTick = vi.fn().mockResolvedValue({ tickNumber: 50 });
+    const service = new TransferService(sdk);
+    await service.send({
+      destination,
+      amount: 1,
+      signer: { seed },
+      metadata: { tickOffset: 20 },
+      dryRun: true
+    });
+    expect(buildUnsignedTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ tick: 70 })
+    );
+  });
+
+  it('prefers explicit tick number over offsets', async () => {
+    const sdk = createSdk();
+    sdk.core.archive.getLatestTick = vi.fn().mockResolvedValue({ tickNumber: 10 });
+    const service = new TransferService(sdk, { defaultTickOffset: 100 });
+    await service.send({
+      destination,
+      amount: 1,
+      signer: { seed },
+      metadata: { tickNumber: 999, tickOffset: 5 },
+      dryRun: true
+    });
+    expect(buildUnsignedTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ tick: 999 })
+    );
   });
 });

@@ -1,7 +1,9 @@
 import { HttpClient } from '../transport/http-client';
 import {
   TransactionByHashResponseSchema,
-  TransactionsForIdentitySchema
+  TransactionsForIdentitySchema,
+  type TransactionByHashResponse,
+  type TransactionsForIdentityResponse
 } from '../models/query-schemas';
 import { identitySchema } from '../models/shared-schemas';
 import { parseWithSchema } from '../utils/validation';
@@ -9,7 +11,7 @@ import { parseWithSchema } from '../utils/validation';
 export class QueryServiceClient {
   constructor(private readonly http: HttpClient) {}
 
-  async getTransactionByHash(hash: string) {
+  async getTransactionByHash(hash: string): Promise<TransactionByHashResponse> {
     const response = await this.http.request({
       path: `/getTransactionByHash`,
       method: 'POST',
@@ -18,7 +20,10 @@ export class QueryServiceClient {
     return parseWithSchema(TransactionByHashResponseSchema, response);
   }
 
-  async getTransactionsForIdentity(identity: string, options?: { limit?: number; from?: number }) {
+  async getTransactionsForIdentity(
+    identity: string,
+    options?: { limit?: number; from?: number }
+  ): Promise<TransactionsForIdentityResponse> {
     identitySchema.parse(identity);
     const response = await this.http.request({
       path: `/getTransactionsForIdentity`,
@@ -32,7 +37,10 @@ export class QueryServiceClient {
     return parseWithSchema(TransactionsForIdentitySchema, response);
   }
 
-  async getTransfersByIdentity(identity: string, options?: { pageSize?: number; autoPaginate?: boolean }) {
+  async getTransfersByIdentity(
+    identity: string,
+    options?: { pageSize?: number; autoPaginate?: boolean }
+  ): Promise<TransactionsForIdentityResponse['transactions']> {
     const limit = options?.pageSize ?? 50;
     let from = 0;
     const transactions: Awaited<ReturnType<QueryServiceClient['getTransactionsForIdentity']>>['transactions'] = [];

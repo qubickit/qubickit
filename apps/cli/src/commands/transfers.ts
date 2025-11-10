@@ -23,6 +23,7 @@ interface TransferSendOptions {
   inputEncoding?: 'base64' | 'hex' | 'utf8';
   inputType?: string | number;
   tick?: string | number;
+  tickOffset?: string | number;
   procedureId?: string | number;
 }
 
@@ -33,8 +34,11 @@ export async function sendTransferCommand(options: TransferSendOptions) {
   const amount = parseString(amountInput, 'amount');
   const signer = await resolveSigner(ctx, options);
   const input = decodePayload(options.input, options.inputEncoding);
+  const tickNumber = parseInteger(options.tick, 'tick');
+  const tickOffset = parseInteger(options.tickOffset, 'tick offset', { min: 0 });
   const metadata = {
-    tickNumber: parseInteger(options.tick, 'tick'),
+    tickNumber,
+    tickOffset,
     procedureId: parseInteger(options.procedureId, 'procedure id')
   };
   const inputType = parseInteger(options.inputType, 'input type');

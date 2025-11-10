@@ -381,7 +381,7 @@ const resolveStruct = (
   kind: StructCollection,
   id?: number,
   name?: string,
-  structKey: StructKey
+  structKey: StructKey = 'inputStruct'
 ) => {
   if (!definition) return undefined;
   const collection = definition[kind];
