@@ -39,6 +39,8 @@ export function createBalanceWatcher(sdk: QubicSdk, options: BalanceWatcherOptio
     try {
       const response = await getFreshBalance(options.identity, { useCache: false });
       previousSnapshot = { balance: response.balance };
+      channel.emitData(response);
+      options.telemetry?.onUpdate?.(response);
     } catch (error) {
       channel.emitError(error);
       options.telemetry?.onError?.(error);

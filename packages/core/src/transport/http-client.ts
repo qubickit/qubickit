@@ -368,7 +368,11 @@ export class HttpClient {
 
     if (!response.ok) {
       if (attempt < this.retryAttempts && this.shouldRetry(response.status)) {
-        await this.delay(this.retryDelay * (attempt + 1));
+        const retryDelay =
+          response.status === 429
+            ? this.getRetryAfterMs(response) ?? this.retryDelay * (attempt + 1)
+            : this.retryDelay * (attempt + 1);
+        await this.delay(retryDelay);
         return this.executeWithRetry<T>(url, init, attempt + 1);
       }
 
@@ -397,7 +401,7 @@ export class HttpClient {
   }
 
   private shouldRetry(status: number): boolean {
-    return status >= 500 || status === 408;
+    return status >= 500 || status === 408 || status === 429;
   }
 
   private async safeParseBody(response: Response): Promise<unknown> {
@@ -410,6 +414,20 @@ export class HttpClient {
 
   private async delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private getRetryAfterMs(response: Response): number | undefined {
+    const header = response.headers.get("retry-after");
+    if (!header) return undefined;
+    const seconds = Number(header);
+    if (Number.isFinite(seconds)) {
+      return Math.max(0, seconds * 1000);
+    }
+    const parsed = Date.parse(header);
+    if (!Number.isNaN(parsed)) {
+      return Math.max(0, parsed - Date.now());
+    }
+    return undefined;
   }
 
   private cacheKeyFromOptions(options: RequestOptions): string {

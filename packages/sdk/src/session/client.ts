@@ -37,6 +37,7 @@ export interface TransactionListOptions {
   limit?: number;
   from?: number;
   cacheTtlMs?: number;
+  signal?: AbortSignal;
 }
 
 export interface TransactionsForIdentityResponse {
@@ -97,29 +98,33 @@ export class SessionClient {
 
   async listTransactions(identity: string, options: TransactionListOptions = {}): Promise<TransactionsForIdentityResponse> {
     identitySchema.parse(identity);
-    const cacheKey = `identity:${identity}:from:${options.from ?? 0}:limit:${options.limit ?? 25}`;
+    const { signal, ...rest } = options;
+    const cacheKey = `identity:${identity}:from:${rest.from ?? 0}:limit:${rest.limit ?? 25}`;
     const cached = (await this.cache.get(cacheKey)) as TransactionsForIdentityResponse | undefined;
     if (cached) {
       return cached;
     }
     const queryOptions: QueryTransactionsOptions = {};
-    if (typeof options.limit === 'number') {
-      queryOptions.limit = options.limit;
+    if (typeof rest.limit === 'number') {
+      queryOptions.limit = rest.limit;
     }
-    if (typeof options.from === 'number') {
-      queryOptions.from = options.from;
+    if (typeof rest.from === 'number') {
+      queryOptions.from = rest.from;
     }
 
-    const result = (await runWithTransportHooks(
-      this.sdk.hooks,
-      () => this.sdk.core.query.getTransactionsForIdentity(identity, queryOptions),
-      {
-        method: 'query.getTransactionsForIdentity',
-        params: { identity, options: queryOptions }
+    const fallback = this.fallbackOrder;
+    const errors: unknown[] = [];
+    for (const source of fallback) {
+      try {
+        const result = await this.fetchTransactionsFromSource(source, identity, queryOptions, signal);
+        await this.cache.set(cacheKey, result, rest.cacheTtlMs ?? this.defaultCacheTtlMs);
+        return result;
+      } catch (error) {
+        errors.push(error);
       }
-    )) as TransactionsForIdentityResponse;
-    await this.cache.set(cacheKey, result, options.cacheTtlMs ?? this.defaultCacheTtlMs);
-    return result;
+    }
+
+    throw new AggregateError(errors, 'All session sources failed.');
   }
 
   async *streamTransactions(identity: string, options: { pageSize?: number; from?: number } = {}) {
@@ -230,6 +235,43 @@ export class SessionClient {
       await telemetry?.onFailure?.({ method, error });
       throw error;
     }
+  }
+
+  private async fetchTransactionsFromSource(
+    source: SessionSource,
+    identity: string,
+    options: QueryTransactionsOptions,
+    signal?: AbortSignal
+  ): Promise<TransactionsForIdentityResponse> {
+    if (source === 'query') {
+      return (await runWithTransportHooks(
+        this.sdk.hooks,
+        () => this.sdk.core.query.getTransactionsForIdentity(identity, options),
+        {
+          method: 'query.getTransactionsForIdentity',
+          params: { identity, options },
+          signal
+        }
+      )) as TransactionsForIdentityResponse;
+    }
+    const page = options.from ?? 0;
+    const limit = options.limit ?? 100;
+    const response = (await runWithTransportHooks(
+      this.sdk.hooks,
+      async () => {
+        const tick = Math.floor(page / limit);
+        const data = await this.sdk.core.archive.getTickTransactions(tick);
+        return {
+          transactions: data.transactions
+        };
+      },
+      {
+        method: 'archive.getTickTransactions',
+        params: { identity, options },
+        signal
+      }
+    )) as TransactionsForIdentityResponse;
+    return response;
   }
 
   private async throttle(method: string) {
