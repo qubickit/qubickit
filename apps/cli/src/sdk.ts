@@ -37,6 +37,33 @@ export function createCliSdk(config: CliConfig): QubicSdk {
       query: config.queryHost
     },
     cache,
+    telemetry: {
+      logger: {
+        debug(message, context) {
+          if (isVerboseLogging()) {
+            logVerbose(`[sdk] ${message}`, context);
+          }
+        },
+        info(message, context) {
+          if (isVerboseLogging()) {
+            logInfo(`[sdk] ${message}`, context);
+          }
+        },
+        warn(message, context) {
+          logWarn(`[sdk] ${message}`, context);
+        },
+        error(message, context) {
+          logError(`[sdk] ${message}`, context);
+        }
+      },
+      metrics: {
+        record(metric, value, tags) {
+          if (isVerboseLogging()) {
+            logVerbose(`[metrics] ${metric}`, { value, tags });
+          }
+        }
+      }
+    },
     wallet: new WalletManager({
       storage: walletStorage,
       sessionPersistence: sessionStorage

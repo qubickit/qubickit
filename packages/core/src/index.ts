@@ -51,6 +51,14 @@ export interface CoreTransportOptions {
   defaultHeaders?: Record<string, string>;
   timeoutMs?: number;
   hooks?: HttpClientOptions['hooks'];
+  httpClientOptions?: Partial<
+    Record<
+      HostKey,
+      Omit<HttpClientOptions, 'baseUrl'> & {
+        baseUrl?: string;
+      }
+    >
+  >;
 }
 
 export type CoreTransports = Record<HostKey, HttpClient>;
@@ -62,11 +70,18 @@ export function createCoreTransports(options: CoreTransportOptions = {}): CoreTr
   };
 
   return Object.entries(mergedHosts).reduce((acc, [key, baseUrl]) => {
-    acc[key as HostKey] = createHttpClient({
-      baseUrl,
-      defaultHeaders: options.defaultHeaders,
-      timeoutMs: options.timeoutMs,
-      hooks: options.hooks
+    const hostKey = key as HostKey;
+    const overrides = options.httpClientOptions?.[hostKey];
+    acc[hostKey] = createHttpClient({
+      baseUrl: overrides?.baseUrl ?? baseUrl,
+      defaultHeaders: overrides?.defaultHeaders ?? options.defaultHeaders,
+      timeoutMs: overrides?.timeoutMs ?? options.timeoutMs,
+      hooks: overrides?.hooks ?? options.hooks,
+      fallbackHosts: overrides?.fallbackHosts,
+      retry: overrides?.retry,
+      cache: overrides?.cache,
+      requestHistorySize: overrides?.requestHistorySize,
+      metrics: overrides?.metrics
     });
     return acc;
   }, {} as CoreTransports);

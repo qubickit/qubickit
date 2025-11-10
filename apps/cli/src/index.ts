@@ -229,7 +229,10 @@ function registerTransferCommands(root: Command) {
   );
 
   addScopedCommand(group, root, scope, 'queue:resume', 'Resume any queued transfers awaiting broadcast.', (cmd) =>
-    cmd.action(resumeTransferQueueCommand)
+    cmd.option('--json', 'Output JSON queue entries').action((opts) => resumeTransferQueueCommand({ json: opts.json }))
+  );
+  addScopedCommand(group, root, scope, 'queue:list', 'List pending transfers awaiting retry.', (cmd) =>
+    cmd.option('--json', 'Output JSON queue entries').action((opts) => resumeTransferQueueCommand({ list: true, json: opts.json }))
   );
 }
 
