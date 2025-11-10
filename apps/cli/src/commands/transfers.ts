@@ -72,8 +72,29 @@ export async function sendTransferCommand(options: TransferSendOptions) {
   }
 }
 
-export async function resumeTransferQueueCommand() {
+export async function resumeTransferQueueCommand(options: { list?: boolean; json?: boolean } = {}) {
   const ctx = await createContext();
+  if (options.list) {
+    const pending = await ctx.sdk.transfers.getQueue().list();
+    if (options.json) {
+      printJson(pending);
+    } else if (!pending.length) {
+      logInfo('Transfer queue is empty.');
+    } else {
+      printTable(
+        pending.map((entry) => ({
+          id: entry.id,
+          type: entry.type,
+          status: entry.status,
+          attempts: entry.attempts,
+          destination: entry.payload.destination,
+          amount: entry.payload.amount,
+          updatedAt: new Date(entry.updatedAt).toLocaleString()
+        }))
+      );
+    }
+    return;
+  }
   await ctx.sdk.transfers.resumePending();
   logSuccess('Pending transfer queue processed.');
 }
