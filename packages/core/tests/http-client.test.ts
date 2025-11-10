@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'bun:test';
 import { createHttpClient } from '../src/transport/http-client';
-import { QubicCircuitOpenError } from '../src/errors';
+import { QubicCircuitOpenError, QubicTimeoutError } from '../src/errors';
 
 describe('HttpClient', () => {
   it('builds URLs with query params', async () => {
@@ -177,5 +177,83 @@ describe('HttpClient resilience features', () => {
     expect(diagnostics.hosts.length).toBe(2);
     expect(diagnostics.recentRequests.length).toBe(2);
     expect(diagnostics.hosts[0]?.circuitOpen).toBe(true);
+  });
+
+  it('throws QubicTimeoutError when request exceeds timeout regardless of caller signal', async () => {
+    const fetchImpl = vi.fn(
+      (_input: RequestInfo, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            const error = new Error('Aborted');
+            error.name = 'AbortError';
+            reject(error);
+          });
+        })
+    );
+
+    const client = createHttpClient({
+      baseUrl: 'https://example.com',
+      fetchImpl: fetchImpl as typeof fetch,
+      timeoutMs: 10
+    });
+
+    await expect(client.request({ path: '/' })).rejects.toThrow(QubicTimeoutError);
+  });
+
+  it('propagates caller AbortSignal even when timeouts are configured', async () => {
+    const fetchImpl = vi.fn(
+      (_input: RequestInfo, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            const error = new Error('Aborted');
+            error.name = 'AbortError';
+            reject(error);
+          });
+        })
+    );
+
+    const client = createHttpClient({
+      baseUrl: 'https://example.com',
+      fetchImpl: fetchImpl as typeof fetch,
+      timeoutMs: 1_000
+    });
+    const controller = new AbortController();
+    const request = client.request({ path: '/', signal: controller.signal });
+    const abortReason = new Error('user abort');
+    controller.abort(abortReason);
+    await expect(request).rejects.toThrow('user abort');
+  });
+
+  it('normalizes cache keys regardless of query ordering', async () => {
+    const fetchImpl = vi.fn(async () => {
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      });
+    });
+
+    const cache = {
+      store: new Map<string, unknown>(),
+      get(key: string) {
+        return this.store.get(key);
+      },
+      set(key: string, value: unknown) {
+        this.store.set(key, value);
+      },
+      clear() {
+        this.store.clear();
+      }
+    };
+
+    const client = createHttpClient({
+      baseUrl: 'https://example.com',
+      fetchImpl,
+      cache
+    });
+
+    await client.request({ path: '/cached', query: { foo: '1', bar: '2' }, useCache: true });
+    await client.request({ path: '/cached', query: { bar: '2', foo: '1' }, useCache: true });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });

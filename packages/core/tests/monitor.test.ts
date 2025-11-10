@@ -61,4 +61,16 @@ describe('monitorTransactionStatus', () => {
     expect(result.moneyFlew).toBe(true);
     expect(queryCalls).toBeGreaterThanOrEqual(2);
   });
+
+  it('can be aborted via AbortSignal', async () => {
+    const archive = createArchiveClient([{ moneyFlew: false, txId: 'tx1' }]);
+    const controller = new AbortController();
+    const promise = monitorTransactionStatus(archive as ArchiveClient, 'tx1', {
+      pollIntervalMs: 5,
+      timeoutMs: 1_000,
+      signal: controller.signal
+    });
+    controller.abort(new Error('stop'));
+    await expect(promise).rejects.toThrow('stop');
+  });
 });

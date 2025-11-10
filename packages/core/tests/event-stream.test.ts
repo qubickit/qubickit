@@ -17,19 +17,28 @@ const createStreamResponse = (chunks: string[]) => {
 
 describe('EventStreamSubscription', () => {
   it('parses server-sent events', async () => {
-    const fetchImpl = async () => createStreamResponse(['data: hello\n\n', 'event: custom\ndata: world\n\n']);
-    const subscription = new EventStreamSubscription('https://example.com/stream', { fetchImpl, reconnect: false });
-    const received: string[] = [];
+    const fetchImpl = (async () =>
+      createStreamResponse(['data: hello\n\n', 'event: custom\ndata: world\nretry: 2000\n\n'])) as typeof fetch;
+    fetchImpl.preconnect = async () => {};
+    const subscription = new EventStreamSubscription('https://example.com/stream', {
+      fetchImpl,
+      reconnect: false
+    });
+    const received: Array<{ event: string; data: string; retry?: number }> = [];
     for await (const event of subscription) {
-      received.push(`${event.event ?? 'message'}:${event.data}`);
+      received.push({ event: event.event ?? 'message', data: event.data, retry: event.retry });
     }
-    expect(received).toEqual(['message:hello', 'custom:world']);
+    expect(received).toEqual([
+      { event: 'message', data: 'hello', retry: undefined },
+      { event: 'custom', data: 'world', retry: 2000 }
+    ]);
   });
 });
 
 describe('EventStreamClient', () => {
   it('subscribes to relative paths', async () => {
-    const fetchImpl = async () => createStreamResponse(['data: ok\n\n']);
+    const fetchImpl = (async () => createStreamResponse(['data: ok\n\n'])) as typeof fetch;
+    fetchImpl.preconnect = async () => {};
     const client = new EventStreamClient('https://example.com', { fetchImpl, reconnect: false });
     const subscription = client.subscribe('/stream');
     const events: string[] = [];

@@ -9,6 +9,7 @@ export interface TickWatcherOptions {
   eventStream?: {
     createSubscription: () => TickStreamSubscription;
     parseEvent?: (event: EventStreamMessage) => number | number[] | undefined;
+    reconnectDelayMs?: number;
   };
 }
 
@@ -18,6 +19,7 @@ export type TickStreamSubscription = AsyncIterable<EventStreamMessage> & {
 
 export class TickWatcher {
   private timer: ReturnType<typeof setInterval> | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private lastTick = 0;
   private readonly listeners = new Set<TickListener>();
   private streamSubscription: TickStreamSubscription | null = null;
@@ -44,9 +46,11 @@ export class TickWatcher {
       this.streamSubscription = null;
     }
     this.streamTask = null;
-    if (!this.timer) return;
-    clearInterval(this.timer);
-    this.timer = null;
+    this.stopPolling();
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
   }
 
   onTick(listener: TickListener) {
@@ -56,12 +60,35 @@ export class TickWatcher {
 
   private async poll() {
     try {
-      const latest = this.options.latestTickProvider
-        ? await this.options.latestTickProvider()
-        : (await this.archiveClient.getTickData(this.lastTick + 1)).tickData?.tickNumber ?? this.lastTick;
-      if (latest) this.emitTicks(latest);
+      const latest = await this.fetchLatestTick();
+      if (typeof latest === 'number') {
+        this.emitTicks(latest);
+      }
     } catch (error) {
       console.warn('TickWatcher poll failed', error);
+    }
+  }
+
+  private async fetchLatestTick(): Promise<number | undefined> {
+    if (this.options.latestTickProvider) {
+      try {
+        return await this.options.latestTickProvider();
+      } catch (error) {
+        console.warn('TickWatcher latestTickProvider failed', error);
+      }
+    }
+    try {
+      const response = await this.archiveClient.getLatestTick();
+      return response.tickNumber;
+    } catch (error) {
+      console.warn('TickWatcher getLatestTick failed', error);
+      try {
+        const status = await this.archiveClient.getStatus();
+        return status.lastProcessedTick?.tickNumber;
+      } catch (statusError) {
+        console.warn('TickWatcher getStatus fallback failed', statusError);
+        return undefined;
+      }
     }
   }
 
@@ -74,19 +101,25 @@ export class TickWatcher {
   }
 
   private startStream() {
-    if (this.streamSubscription) return;
-    if (!this.options.eventStream) {
-      this.startPolling();
-      return;
-    }
+    if (!this.options.eventStream || this.streamSubscription) return;
+    this.stopPolling();
     this.streamSubscription = this.options.eventStream.createSubscription();
     this.streamTask = this.consumeStream(this.streamSubscription);
+  }
+
+  private stopPolling() {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
   }
 
   private startPolling() {
     if (this.timer) return;
     const interval = this.options.intervalMs ?? 5_000;
-    this.timer = setInterval(() => this.poll(), interval);
+    this.timer = setInterval(() => {
+      void this.poll();
+    }, interval);
   }
 
   private async consumeStream(subscription: TickStreamSubscription) {
@@ -109,35 +142,25 @@ export class TickWatcher {
         this.streamSubscription = null;
         this.streamTask = null;
       }
-      if (this.options.eventStream && !this.timer) {
-        this.startPolling();
-      }
+      this.startPolling();
+      this.scheduleStreamReconnect();
     }
   }
 
+  private scheduleStreamReconnect() {
+    if (!this.options.eventStream) return;
+    if (this.reconnectTimer) return;
+    const delay = this.options.eventStream.reconnectDelayMs ?? 5_000;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (!this.streamSubscription) {
+        this.startStream();
+      }
+    }, delay);
+  }
+
   private async initializeLastTick() {
-    let latest: number | undefined;
-    if (this.options.latestTickProvider) {
-      try {
-        latest = await this.options.latestTickProvider();
-      } catch (error) {
-        console.warn('TickWatcher latestTickProvider failed', error);
-      }
-    }
-    if (typeof latest !== 'number') {
-      try {
-        const response = await this.archiveClient.getLatestTick();
-        latest = response.tickNumber;
-      } catch (error) {
-        console.warn('TickWatcher getLatestTick failed', error);
-        try {
-          const status = await this.archiveClient.getStatus();
-          latest = status.lastProcessedTick?.tickNumber;
-        } catch (statusError) {
-          console.warn('TickWatcher getStatus fallback failed', statusError);
-        }
-      }
-    }
+    const latest = await this.fetchLatestTick();
     if (typeof latest === 'number' && latest > 0) {
       this.lastTick = latest - 1;
     }

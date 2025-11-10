@@ -3,6 +3,7 @@ import { createIdentityPackage, identityToPublicKey, type IdentityPackage } from
 import { normalizeAmount } from '../utils/amount';
 import { identitySchema } from '../models/shared-schemas';
 import { toBase64 } from '../utils/base64';
+import { bytesToHex } from '../utils/encoding';
 
 export interface TransactionDraft {
   sourceSeed: string;
@@ -125,7 +126,7 @@ export const signTransaction = async (identity: IdentityPackage, unsignedBytes: 
 };
 
 export const encodeSignedTransaction = (unsignedBytes: Uint8Array, signedBytes: Uint8Array) => {
-  const txId = Buffer.from(unsignedBytes).toString('hex');
+  const txId = bytesToHex(unsignedBytes);
   const encoded = toBase64(signedBytes);
   return { txId, encoded };
 };
