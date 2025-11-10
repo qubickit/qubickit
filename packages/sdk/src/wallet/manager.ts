@@ -11,9 +11,14 @@ import {
   type WalletAccount,
   type WalletProfile,
   SeedSchema,
-  ProfileMetadataSchema
+  ProfileMetadataSchema,
+  WalletSessionRecordSchema,
+  type SerializedIdentityPackage
 } from './schemas';
 import { WalletError } from '../errors/sdk-error';
+import { createMemoryPersistenceAdapter, type PersistenceAdapter } from '../persistence';
+
+type WalletSessionRecordStored = z.infer<typeof WalletSessionRecordSchema>;
 
 const CreateProfileInputSchema = z.object({
   profileId: z.string().min(1).optional(),
@@ -65,6 +70,7 @@ type WalletSessionRecord = WalletSessionHandle;
 
 export interface WalletManagerOptions {
   storage?: StorageAdapter<typeof WalletProfileSchema>;
+  sessionPersistence?: PersistenceAdapter<typeof WalletSessionRecordSchema>;
   clock?: () => number;
   sessionTtlMs?: number;
 }
@@ -74,6 +80,9 @@ export class WalletManager {
   private readonly sessions = new Map<string, WalletSessionRecord>();
   private readonly clock: () => number;
   private readonly sessionTtlMs: number;
+  private readonly sessionPersistence: PersistenceAdapter<typeof WalletSessionRecordSchema>;
+  private sessionsLoaded = false;
+  private sessionsReady?: Promise<void>;
 
   constructor(options: WalletManagerOptions = {}) {
     this.clock = options.clock ?? (() => Date.now());
@@ -83,6 +92,12 @@ export class WalletManager {
       createMemoryStorageAdapter({
         schema: WalletProfileSchema,
         namespace: 'sdk-wallet-profiles'
+      });
+    this.sessionPersistence =
+      options.sessionPersistence ??
+      createMemoryPersistenceAdapter({
+        schema: WalletSessionRecordSchema,
+        namespace: 'sdk-wallet-sessions'
       });
   }
 
@@ -167,6 +182,7 @@ export class WalletManager {
   }
 
   async issueSessionToken(input: IssueSessionOptions): Promise<WalletSessionHandle> {
+    await this.ensureSessionsLoaded();
     const payload = SessionTokenOptionsSchema.parse(input);
     const profile = await this.requireProfile(payload.profileId);
     const seed = await this.decryptSeed(profile.profileId, payload.passphrase);
@@ -183,10 +199,12 @@ export class WalletManager {
       expiresAt: createdAt + (payload.ttlMs ?? this.sessionTtlMs)
     };
     this.sessions.set(token, record);
+    await this.sessionPersistence.write(token, serializeSessionRecord(record));
     return record;
   }
 
   async resumeSession(token: string, options?: { extendMs?: number; signal?: AbortSignal }): Promise<WalletSessionHandle> {
+    await this.ensureSessionsLoaded();
     assertNotAborted(options?.signal);
     const record = this.sessions.get(token);
     if (!record) {
@@ -195,16 +213,21 @@ export class WalletManager {
     const now = this.clock();
     if (record.expiresAt <= now) {
       this.sessions.delete(token);
+      await this.sessionPersistence.delete(token);
       throw new Error('Session token has expired.');
     }
     if (options?.extendMs) {
       record.expiresAt = now + options.extendMs;
+      await this.sessionPersistence.write(record.token, serializeSessionRecord(record));
     }
     return record;
   }
 
   invalidateSession(token: string) {
-    this.sessions.delete(token);
+    void this.ensureSessionsLoaded().then(() => {
+      this.sessions.delete(token);
+      void this.sessionPersistence.delete(token);
+    });
   }
 
   private async decryptSeed(profileId: string, passphrase: string): Promise<string> {
@@ -259,4 +282,54 @@ export class WalletManager {
     if (!profile) throw new WalletError(`Profile ${profileId} not found.`, { profileId });
     return profile;
   }
+
+  private async ensureSessionsLoaded() {
+    if (this.sessionsLoaded) return;
+    if (!this.sessionsReady) {
+      this.sessionsReady = this.restoreSessions();
+    }
+    await this.sessionsReady;
+  }
+
+  private async restoreSessions() {
+    if (this.sessionsLoaded) return;
+    const now = this.clock();
+    const entries = await this.sessionPersistence.list();
+    for (const [, stored] of entries) {
+      if (stored.expiresAt <= now) {
+        await this.sessionPersistence.delete(stored.token);
+        continue;
+      }
+      this.sessions.set(stored.token, deserializeSessionRecord(stored));
+    }
+    this.sessionsLoaded = true;
+  }
 }
+
+const serializeSessionRecord = (record: WalletSessionRecord): WalletSessionRecordStored => ({
+  ...record,
+  identityPackage: serializeIdentityPackage(record.identityPackage)
+});
+
+const serializeIdentityPackage = (
+  identityPackage: WalletSessionHandle['identityPackage']
+): SerializedIdentityPackage => ({
+  privateKey: Array.from(identityPackage.privateKey),
+  publicKey: Array.from(identityPackage.publicKey),
+  publicKeyWithChecksum: Array.from(identityPackage.publicKeyWithChecksum),
+  identity: identityPackage.identity
+});
+
+const deserializeSessionRecord = (record: WalletSessionRecordStored): WalletSessionRecord => ({
+  ...record,
+  identityPackage: deserializeIdentityPackage(record.identityPackage)
+});
+
+const deserializeIdentityPackage = (
+  identityPackage: SerializedIdentityPackage
+): WalletSessionHandle['identityPackage'] => ({
+  privateKey: Uint8Array.from(identityPackage.privateKey),
+  publicKey: Uint8Array.from(identityPackage.publicKey),
+  publicKeyWithChecksum: Uint8Array.from(identityPackage.publicKeyWithChecksum),
+  identity: identityPackage.identity
+});

@@ -5,6 +5,8 @@ import {
   WalletProfileSchema,
   WalletManager
 } from '@qubickit/sdk';
+import { createFilePersistenceAdapter } from '@qubickit/sdk/persistence';
+import { WalletSessionRecordSchema } from '@qubickit/sdk/wallet';
 import { z } from 'zod';
 import type { CliConfig } from './config';
 import { createJsonFileStorageAdapter } from './storage/json-storage';
@@ -13,6 +15,12 @@ export function createCliSdk(config: CliConfig): QubicSdk {
   const walletStorage = createJsonFileStorageAdapter({
     filePath: config.walletStorePath,
     schema: WalletProfileSchema
+  });
+
+  const sessionStorage = createFilePersistenceAdapter({
+    filePath: config.sessionStorePath,
+    schema: WalletSessionRecordSchema,
+    pretty: true
   });
 
   const cache = createMemoryCacheAdapter({
@@ -30,7 +38,8 @@ export function createCliSdk(config: CliConfig): QubicSdk {
     },
     cache,
     wallet: new WalletManager({
-      storage: walletStorage
+      storage: walletStorage,
+      sessionPersistence: sessionStorage
     })
   });
 }

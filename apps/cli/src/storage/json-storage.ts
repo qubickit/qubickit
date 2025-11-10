@@ -1,5 +1,5 @@
 import type { StorageAdapter } from '@qubickit/sdk';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { z, type ZodTypeAny } from 'zod';
 
@@ -29,7 +29,10 @@ export function createJsonFileStorageAdapter<TSchema extends ZodTypeAny>(
 
   const writeStore = async (store: Record<string, z.infer<TSchema>>) => {
     await mkdir(dirname(options.filePath), { recursive: true });
-    await writeFile(options.filePath, JSON.stringify(store, null, 2), 'utf8');
+    const payload = JSON.stringify(store, null, 2);
+    const tempPath = `${options.filePath}.${process.pid}.${Date.now()}.tmp`;
+    await writeFile(tempPath, payload, 'utf8');
+    await rename(tempPath, options.filePath);
   };
 
   return {

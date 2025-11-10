@@ -10,6 +10,7 @@ export interface CliConfig {
   statsHost: string;
   queryHost: string;
   walletStorePath: string;
+  sessionStorePath: string;
 }
 
 const DEFAULT_CONFIG_PATH = process.env.QUBICKIT_CONFIG ?? join(homedir(), '.qubickit', 'config.json');
@@ -24,7 +25,8 @@ export async function loadCliConfig(overrides: Partial<CliConfig> = {}): Promise
     archiveHost: process.env.QUBIC_ARCHIVE_HOST,
     statsHost: process.env.QUBIC_STATS_HOST,
     queryHost: process.env.QUBIC_QUERY_HOST,
-    walletStorePath: process.env.QUBIC_WALLET_STORE
+    walletStorePath: process.env.QUBIC_WALLET_STORE,
+    sessionStorePath: process.env.QUBIC_SESSION_STORE
   };
 
   const resolved: CliConfig = {
@@ -37,7 +39,12 @@ export async function loadCliConfig(overrides: Partial<CliConfig> = {}): Promise
       overrides.walletStorePath ??
       fileConfig.walletStorePath ??
       envConfig.walletStorePath ??
-      join(dirname(configPath), 'wallets.json')
+      join(dirname(configPath), 'wallets.json'),
+    sessionStorePath:
+      overrides.sessionStorePath ??
+      fileConfig.sessionStorePath ??
+      envConfig.sessionStorePath ??
+      join(dirname(configPath), 'sessions.json')
   };
 
   return resolved;
@@ -49,7 +56,8 @@ export async function saveCliConfig(config: CliConfig): Promise<void> {
     archiveHost: config.archiveHost,
     statsHost: config.statsHost,
     queryHost: config.queryHost,
-    walletStorePath: config.walletStorePath
+    walletStorePath: config.walletStorePath,
+    sessionStorePath: config.sessionStorePath
   };
   await mkdir(dirname(config.configPath), { recursive: true });
   await writeFile(config.configPath, JSON.stringify(payload, null, 2), 'utf8');
