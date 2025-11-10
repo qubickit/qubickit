@@ -14,6 +14,9 @@ bun run --cwd apps/cli dev:watch -- watch:ticks --count 5
 # bundle the CLI (outputs dist/index.js with a shebang)
 bun run --cwd apps/cli build
 
+# run the lightweight smoke tests
+bun run --cwd apps/cli test
+
 # install globally (adds both `qubic` and `qk` shortcuts)
 bun add -g @qubickit/cli
 ```
@@ -26,10 +29,10 @@ bun add -g @qubickit/cli
 | `watch ticks|balance|transfers|contracts` | Stream live events using the SDK watchers; verbose mode prints payload details. |
 | `wallet profiles list/create/update/inspect/remove/export` | Interactive profile management (prompts for seeds, passphrases, metadata updates). |
 | `wallet accounts add` | Derive additional accounts with progress spinners. |
-| `wallet sessions issue/resume` | Issue or resume encrypted session tokens. |
-| `wallet balances` | Fetch live balances for every stored account (with per-account spinners). |
+| `wallet sessions issue/resume` | Issue or resume encrypted session tokens (persisted to `sessions.json`). |
+| `wallet balances` | Fetch live balances for every stored account (`--concurrency` controls parallelism). |
 | `session balance/history` | Pull one-off balance snapshots or list recent transactions via the session client. |
-| `transfer send`, `transfer queue:resume` | Draft/broadcast transfers (auto targets latest tick +10 unless `--tick`/`--tick-offset` overrides) and resume the persistence-backed queue. |
+| `transfer send`, `transfer queue:list`, `transfer queue:resume` | Draft/broadcast transfers (auto targets latest tick +10 unless `--tick`/`--tick-offset` overrides), inspect the persistence-backed queue, and resume pending entries. |
 | `contracts list/describe/call/invoke` | Inspect registry metadata (functions/procedures), run read-only calls (with optional `--decode`), or invoke procedures. |
 | `status network` | Fetch latest tick + node health for quick diagnostics. |
 
@@ -38,8 +41,9 @@ Each command documents its flags via `qubic --help` or `qubic <command> --help`.
 | Variable | Purpose |
 | --- | --- |
 | `QUBIC_HTTP_HOST`, `QUBIC_ARCHIVE_HOST`, `QUBIC_STATS_HOST`, `QUBIC_QUERY_HOST` | Override SDK/core hosts without editing the config file. |
-| `QUBIC_WALLET_STORE` | Custom path for the encrypted wallet store (defaults to `~/.qubickit/wallets.json`). |
+| `QUBIC_WALLET_STORE`, `QUBIC_SESSION_STORE` | Custom paths for the encrypted wallet + session stores (defaults to `~/.qubickit/wallets.json` / `sessions.json`). |
 | `QUBIC_SEED`, `QUBIC_WALLET_PASSPHRASE`, `QUBIC_SESSION_TOKEN` | Shortcuts for signer-related commands when you don’t want to pass flags. |
+| `QUBICKIT_VERBOSE=1` | Enables detailed SDK telemetry/metrics output for troubleshooting. |
 
 Examples:
 
@@ -59,6 +63,9 @@ qk wallet accounts add --profile-id <profile> --derivation-index 1
 
 # stream transfers for an identity
 qk watch transfers --identity AAAAAAAAA... --json
+
+# inspect queue state
+qk transfer queue:list --json
 
 # send a transfer using a session token
 QUBIC_SESSION_TOKEN=$(qk wallet sessions issue --profile-id <profile> --json | jq -r .token)
