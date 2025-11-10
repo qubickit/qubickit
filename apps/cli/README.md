@@ -14,6 +14,9 @@ bun run --cwd apps/cli dev:watch -- watch:ticks --count 5
 # bundle the CLI (outputs dist/index.js with a shebang)
 bun run --cwd apps/cli build
 
+# run the lightweight smoke tests
+bun run --cwd apps/cli test
+
 # install globally (adds both `qubic` and `qk` shortcuts)
 bun add -g @qubickit/cli
 ```
