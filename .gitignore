@@ -16,6 +16,7 @@ tmp*/
 .DS_Store
 coverage/
 planning/
+audit/
 
 **/.env
 RELEASING.md

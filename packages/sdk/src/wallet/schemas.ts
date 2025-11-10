@@ -47,3 +47,25 @@ export const WalletStoreSchema = z.object({
   profileId: z.string().min(1),
   profile: WalletProfileSchema
 });
+
+const ByteArraySchema = z.array(z.number().int().min(0).max(255));
+
+export const IdentityPackageSchema = z.object({
+  privateKey: ByteArraySchema,
+  publicKey: ByteArraySchema,
+  publicKeyWithChecksum: ByteArraySchema,
+  identity: z.string().min(1)
+});
+
+export type SerializedIdentityPackage = z.infer<typeof IdentityPackageSchema>;
+
+export const WalletSessionRecordSchema = z.object({
+  token: z.string().min(1),
+  profileId: z.string().min(1),
+  account: WalletAccountSchema,
+  identityPackage: IdentityPackageSchema,
+  createdAt: z.number().int().nonnegative(),
+  expiresAt: z.number().int().positive()
+});
+
+export type WalletSessionRecord = z.infer<typeof WalletSessionRecordSchema>;
