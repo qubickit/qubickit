@@ -1,7 +1,11 @@
-import { QubicCircuitOpenError, QubicHttpError, QubicTimeoutError } from '../errors';
-import type { CacheAdapter } from '../cache/cache-adapter';
+import {
+  QubicCircuitOpenError,
+  QubicHttpError,
+  QubicTimeoutError,
+} from "../errors";
+import type { CacheAdapter } from "../cache/cache-adapter";
 
-export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export interface HttpClientOptions {
   baseUrl: string;
@@ -69,7 +73,8 @@ export interface RequestOptions<TBody = unknown> {
 
 const createFetchWrapper = (impl?: typeof fetch): typeof fetch => {
   const base = impl ?? fetch;
-  const wrapped = ((...args: Parameters<typeof fetch>) => base(...args)) as typeof fetch;
+  const wrapped = ((...args: Parameters<typeof fetch>) =>
+    base(...args)) as typeof fetch;
   Object.assign(wrapped, base);
   return wrapped;
 };
@@ -82,7 +87,7 @@ export class HttpClient {
   private activeHostIndex = 0;
   private readonly hostStates = new Map<string, HostState>();
   private readonly circuitBreaker?: CircuitBreakerOptions;
-  private readonly metricsHooks?: HttpClientOptions['metrics'];
+  private readonly metricsHooks?: HttpClientOptions["metrics"];
   private readonly requestHistory: RequestHistoryEntry[] = [];
   private readonly historySize: number;
 
@@ -91,20 +96,24 @@ export class HttpClient {
     this.retryAttempts = options.retry?.attempts ?? 2;
     this.retryDelay = options.retry?.delayMs ?? 250;
     this.hosts = [options.baseUrl, ...(options.fallbackHosts ?? [])];
-    this.hosts.forEach((host) => this.hostStates.set(host, { failureCount: 0, circuitOpenUntil: null }));
+    this.hosts.forEach((host) =>
+      this.hostStates.set(host, { failureCount: 0, circuitOpenUntil: null })
+    );
     this.circuitBreaker = options.circuitBreaker;
     this.metricsHooks = options.metrics;
     this.historySize = options.requestHistorySize ?? 50;
   }
 
-  async request<TResponse = unknown, TBody = unknown>(options: RequestOptions<TBody>): Promise<TResponse> {
+  async request<TResponse = unknown, TBody = unknown>(
+    options: RequestOptions<TBody>
+  ): Promise<TResponse> {
     const cacheKey = options.cacheKey ?? this.cacheKeyFromOptions(options);
     if (options.useCache && cacheKey && this.options.cache) {
       const cached = await this.getCachedResponse<TResponse>(cacheKey);
       if (cached !== undefined) return cached;
     }
 
-    const method = (options.method ?? 'GET') as HttpMethod;
+    const method = (options.method ?? "GET") as HttpMethod;
     const hostCount = this.hosts.length;
     let lastError: unknown;
 
@@ -119,14 +128,53 @@ export class HttpClient {
 
       const url = this.buildUrl(host, options.path, options.query);
       const fetchOptions = this.buildFetchOptions(options);
+      const timeoutController = new AbortController();
+      const timeoutMs = this.options.timeoutMs ?? 30_000;
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      let abortedByTimeout = false;
+      let abortedByUser = false;
+      let userAbortCleanup: (() => void) | undefined;
+
+      if (timeoutMs > 0) {
+        timeoutId = setTimeout(() => {
+          abortedByTimeout = true;
+          timeoutController.abort();
+        }, timeoutMs);
+      }
+
+      const userSignal = options.signal;
+      if (userSignal) {
+        const onUserAbort = () => {
+          abortedByUser = true;
+          timeoutController.abort(userSignal.reason);
+        };
+        if (userSignal.aborted) {
+          onUserAbort();
+        } else {
+          userSignal.addEventListener("abort", onUserAbort, { once: true });
+          userAbortCleanup = () =>
+            userSignal.removeEventListener("abort", onUserAbort);
+        }
+      }
+
+      fetchOptions.signal = timeoutController.signal;
       const start = Date.now();
 
       try {
         this.options.hooks?.onRequest?.({ url, init: fetchOptions });
-        const response = await this.executeWithRetry<TResponse>(url, fetchOptions);
+        const response = await this.executeWithRetry<TResponse>(
+          url,
+          fetchOptions
+        );
         this.options.hooks?.onResponse?.({ url, response: response.raw });
 
-        this.recordSuccess({ host, method, url, status: response.raw.status, start });
+        this.recordSuccess({
+          host,
+          method,
+          url,
+          status: response.raw.status,
+          start,
+        });
         this.resetHostState(host);
 
         if (options.useCache && cacheKey && this.options.cache) {
@@ -140,62 +188,103 @@ export class HttpClient {
         this.handleFailure(host);
 
         if (!this.shouldFailover(error) || i === hostCount - 1) {
+          if (error instanceof Error && error.name === "AbortError") {
+            if (abortedByUser) {
+              throw userSignal?.reason instanceof Error
+                ? userSignal.reason
+                : (userSignal?.reason ??
+                    new QubicTimeoutError("Request aborted"));
+            }
+            if (abortedByTimeout) {
+              throw new QubicTimeoutError();
+            }
+          }
           throw error;
         }
 
         lastError = error;
+      } finally {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        userAbortCleanup?.();
       }
     }
 
-    throw lastError ?? new Error('All hosts are unavailable');
+    throw lastError ?? new Error("All hosts are unavailable");
   }
 
-  private buildFetchOptions<TBody>(options: RequestOptions<TBody>): RequestInit {
+  private buildFetchOptions<TBody>(
+    options: RequestOptions<TBody>
+  ): RequestInit {
     const headers: Record<string, string> = {
-      'content-type': 'application/json',
+      "content-type": "application/json",
       ...this.options.defaultHeaders,
-      ...options.headers
+      ...options.headers,
     };
 
     const fetchOptions: RequestInit = {
-      method: options.method ?? 'GET',
+      method: options.method ?? "GET",
       headers,
-      signal: options.signal
     };
 
     if (options.body !== undefined) {
-      fetchOptions.body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+      fetchOptions.body =
+        typeof options.body === "string"
+          ? options.body
+          : JSON.stringify(options.body);
     }
 
     return fetchOptions;
   }
 
-  private recordSuccess(params: { host: string; method: HttpMethod; url: string; status?: number; start: number }) {
+  private recordSuccess(params: {
+    host: string;
+    method: HttpMethod;
+    url: string;
+    status?: number;
+    start: number;
+  }) {
     const durationMs = Date.now() - params.start;
     const metrics: RequestMetricsInfo = {
       host: params.host,
       method: params.method,
       url: params.url,
       status: params.status,
-      durationMs
+      durationMs,
     };
     this.metricsHooks?.onSuccess?.(metrics);
     this.pushHistory({ ...metrics, ok: true, timestamp: Date.now() });
   }
 
-  private recordFailure(params: { host: string; method: HttpMethod; url: string; start: number; error: unknown }) {
+  private recordFailure(params: {
+    host: string;
+    method: HttpMethod;
+    url: string;
+    start: number;
+    error: unknown;
+  }) {
     const durationMs = Date.now() - params.start;
-    const status = params.error instanceof QubicHttpError ? params.error.status : undefined;
+    const status =
+      params.error instanceof QubicHttpError ? params.error.status : undefined;
     const metrics: RequestMetricsInfo = {
       host: params.host,
       method: params.method,
       url: params.url,
       status,
-      durationMs
+      durationMs,
     };
     this.metricsHooks?.onFailure?.({ ...metrics, error: params.error });
-    const errorMessage = params.error instanceof Error ? params.error.message : String(params.error);
-    this.pushHistory({ ...metrics, ok: false, error: errorMessage, timestamp: Date.now() });
+    const errorMessage =
+      params.error instanceof Error
+        ? params.error.message
+        : String(params.error);
+    this.pushHistory({
+      ...metrics,
+      ok: false,
+      error: errorMessage,
+      timestamp: Date.now(),
+    });
   }
 
   private pushHistory(entry: RequestHistoryEntry) {
@@ -259,33 +348,23 @@ export class HttpClient {
         host,
         failureCount: state?.failureCount ?? 0,
         circuitOpen,
-        circuitOpenUntil: state?.circuitOpenUntil ?? null
+        circuitOpenUntil: state?.circuitOpenUntil ?? null,
       };
     });
 
     return {
       activeHost: this.hosts[this.activeHostIndex]!,
       hosts,
-      recentRequests: this.getRequestHistory()
+      recentRequests: this.getRequestHistory(),
     };
   }
 
-  private async executeWithRetry<T>(url: string, init: RequestInit, attempt = 0): Promise<{ raw: Response; value: T }> {
-    const controller = new AbortController();
-    const timeoutMs = this.options.timeoutMs ?? 30_000;
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    const initWithAbort = { ...init, signal: init.signal ?? controller.signal };
-    let response: Response;
-    try {
-      response = await this.fetchImpl(url, initWithAbort);
-    } catch (error) {
-      if ((error as Error).name === 'AbortError') {
-        throw new QubicTimeoutError();
-      }
-      throw error;
-    } finally {
-      clearTimeout(timeout);
-    }
+  private async executeWithRetry<T>(
+    url: string,
+    init: RequestInit,
+    attempt = 0
+  ): Promise<{ raw: Response; value: T }> {
+    const response: Response = await this.fetchImpl(url, init);
 
     if (!response.ok) {
       if (attempt < this.retryAttempts && this.shouldRetry(response.status)) {
@@ -301,8 +380,12 @@ export class HttpClient {
     return { raw: response, value };
   }
 
-  private buildUrl(baseUrl: string, pathname: string, query?: RequestOptions['query']): string {
-    const normalized = pathname.startsWith('/') ? pathname : `/${pathname}`;
+  private buildUrl(
+    baseUrl: string,
+    pathname: string,
+    query?: RequestOptions["query"]
+  ): string {
+    const normalized = pathname.startsWith("/") ? pathname : `/${pathname}`;
     const url = new URL(normalized, baseUrl);
     if (query) {
       for (const [key, value] of Object.entries(query)) {
@@ -318,8 +401,8 @@ export class HttpClient {
   }
 
   private async safeParseBody(response: Response): Promise<unknown> {
-    const contentType = response.headers.get('content-type');
-    if (contentType?.includes('application/json')) {
+    const contentType = response.headers.get("content-type");
+    if (contentType?.includes("application/json")) {
       return response.json();
     }
     return response.text();
@@ -330,8 +413,21 @@ export class HttpClient {
   }
 
   private cacheKeyFromOptions(options: RequestOptions): string {
-    const queryKey = options.query ? JSON.stringify(options.query) : '';
-    return `${options.method ?? 'GET'}:${options.path}:${queryKey}`;
+    const queryKey = options.query ? this.stableQueryString(options.query) : "";
+    return `${options.method ?? "GET"}:${options.path}:${queryKey}`;
+  }
+
+  private stableQueryString(
+    query: Record<string, string | number | boolean | undefined>
+  ): string {
+    const sortedEntries = Object.entries(query)
+      .filter(([, value]) => value !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b));
+    const normalized: Record<string, string | number | boolean> = {};
+    for (const [key, value] of sortedEntries) {
+      normalized[key] = value as string | number | boolean;
+    }
+    return JSON.stringify(normalized);
   }
 
   private async getCachedResponse<T>(cacheKey: string): Promise<T | undefined> {
@@ -340,14 +436,18 @@ export class HttpClient {
     return value instanceof Promise ? value : (value as T | undefined);
   }
 
-  private async setCachedResponse<T>(cacheKey: string, value: T): Promise<void> {
+  private async setCachedResponse<T>(
+    cacheKey: string,
+    value: T
+  ): Promise<void> {
     if (!this.options.cache) return;
     const result = this.options.cache.set(cacheKey, value);
     if (result instanceof Promise) await result;
   }
 }
 
-export const createHttpClient = (options: HttpClientOptions) => new HttpClient(options);
+export const createHttpClient = (options: HttpClientOptions) =>
+  new HttpClient(options);
 
 interface HostState {
   failureCount: number;

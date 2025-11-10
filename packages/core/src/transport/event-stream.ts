@@ -2,6 +2,7 @@ export interface EventStreamMessage {
   id?: string;
   event?: string;
   data: string;
+  retry?: number;
 }
 
 export interface EventStreamOptions {
@@ -24,9 +25,11 @@ export class EventStreamSubscription implements AsyncIterable<EventStreamMessage
   private closed = false;
   private controller = new AbortController();
   private readonly fetchImpl: typeof fetch;
+  private retryDelayMs: number;
 
   constructor(private readonly url: string, private readonly options: EventStreamOptions = {}) {
     this.fetchImpl = createFetchWrapper(options.fetchImpl);
+    this.retryDelayMs = options.retryDelayMs ?? 1_000;
     if (options.signal) {
       options.signal.addEventListener('abort', () => this.close(), { once: true });
     }
@@ -41,17 +44,20 @@ export class EventStreamSubscription implements AsyncIterable<EventStreamMessage
         });
         if (!response.body) break;
         for await (const message of readEventStream(response.body)) {
+          if (typeof message.retry === 'number' && Number.isFinite(message.retry)) {
+            this.retryDelayMs = message.retry;
+          }
           yield message;
         }
       } catch (error) {
         this.options.onError?.(error);
         if (!this.options.reconnect || this.closed) break;
-        await delay(this.options.retryDelayMs ?? 1000);
+        await delay(this.retryDelayMs);
         continue;
       }
 
       if (!this.options.reconnect) break;
-      await delay(this.options.retryDelayMs ?? 1000);
+      await delay(this.retryDelayMs);
     }
   }
 
@@ -125,6 +131,13 @@ const parseEventChunk = (chunk: string): EventStreamMessage | null => {
       case 'id':
         message.id = value;
         break;
+      case 'retry': {
+        const retryMs = Number(value);
+        if (Number.isFinite(retryMs)) {
+          message.retry = retryMs;
+        }
+        break;
+      }
       default:
         break;
     }

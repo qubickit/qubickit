@@ -1,4 +1,5 @@
 import { BinaryReader, BinaryWriter } from '../utils/binary';
+import { hexToBytes, stringToBytes } from '../utils/encoding';
 import { timeLockSchema, varStructEntrySchema, varStructSchema } from '../models/transaction-schemas';
 
 export interface TimeLockWindow {
@@ -19,9 +20,9 @@ export type VarStructInputEntry = {
 const normalizeValue = (value: Uint8Array | string): Uint8Array => {
   if (typeof value === 'string') {
     if (/^0x[0-9a-f]+$/i.test(value)) {
-      return new Uint8Array(Buffer.from(value.slice(2), 'hex'));
+      return hexToBytes(value.slice(2));
     }
-    return new Uint8Array(Buffer.from(value, 'utf8'));
+    return stringToBytes(value);
   }
   return value;
 };

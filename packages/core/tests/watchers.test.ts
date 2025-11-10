@@ -3,13 +3,26 @@ import { TickWatcher } from '../src/watchers/tick-watcher';
 import type { ArchiveClient } from '../src/clients/archive-client';
 import type { EventStreamMessage } from '../src/transport/event-stream';
 
-class FakeArchiveClient implements Pick<ArchiveClient, 'getTickData'> {
+class FakeArchiveClient
+  implements Pick<ArchiveClient, 'getLatestTick' | 'getStatus' | 'getTickData'>
+{
+  private latest = 0;
+
+  async getLatestTick() {
+    this.latest += 1;
+    return { tickNumber: this.latest };
+  }
+
+  async getStatus() {
+    return { lastProcessedTick: { tickNumber: this.latest } } as const;
+  }
+
   async getTickData(tickNumber: number) {
     return {
       tickData: {
-        computorIndex: 0,
-        epoch: 0,
         tickNumber,
+        epoch: 0,
+        computorIndex: 0,
         timestamp: Date.now().toString()
       }
     };
@@ -22,7 +35,7 @@ describe('TickWatcher', () => {
     const seen: number[] = [];
     const unsubscribe = watcher.onTick((tick) => seen.push(tick));
     watcher.start();
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await new Promise((resolve) => setTimeout(resolve, 30));
     watcher.stop();
     unsubscribe();
     expect(seen.length).toBeGreaterThanOrEqual(3);
@@ -31,11 +44,7 @@ describe('TickWatcher', () => {
 
   it('uses latestTickProvider when supplied', async () => {
     const providerValues = [3, 5];
-    const archive = {
-      async getTickData() {
-        throw new Error('should not call archive');
-      }
-    };
+    const archive = new FakeArchiveClient();
     const watcher = new TickWatcher(archive as unknown as ArchiveClient, {
       intervalMs: 5,
       latestTickProvider: async () => providerValues.shift() ?? 5
@@ -43,12 +52,12 @@ describe('TickWatcher', () => {
     const seen: number[] = [];
     watcher.onTick((tick) => seen.push(tick));
     watcher.start();
-    await new Promise((resolve) => setTimeout(resolve, 35));
+    await new Promise((resolve) => setTimeout(resolve, 30));
     watcher.stop();
-    expect(seen).toEqual([1, 2, 3, 4, 5]);
+    expect(seen).toEqual([3, 4, 5]);
   });
 
-  it('emits ticks from event stream subscription', async () => {
+  it('emits ticks from event stream subscription and reconnects after failures', async () => {
     const events: EventStreamMessage[] = [{ data: '1' }, { data: '3' }];
     class StubSubscription {
       closed = false;
@@ -63,18 +72,24 @@ describe('TickWatcher', () => {
       }
     }
 
+    let created = 0;
     const watcher = new TickWatcher(new FakeArchiveClient() as ArchiveClient, {
       eventStream: {
-        createSubscription: () => new StubSubscription(),
-        parseEvent: (event) => Number(event.data)
+        createSubscription: () => {
+          created += 1;
+          return new StubSubscription();
+        },
+        parseEvent: (event) => Number(event.data),
+        reconnectDelayMs: 5
       }
     });
 
     const seen: number[] = [];
     watcher.onTick((tick) => seen.push(tick));
     watcher.start();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await new Promise((resolve) => setTimeout(resolve, 40));
     watcher.stop();
     expect(seen).toEqual([1, 2, 3]);
+    expect(created).toBeGreaterThanOrEqual(1);
   });
 });

@@ -1,4 +1,5 @@
 import { HttpApiClient } from '../clients/http-api-client';
+import { bytesToBase64 } from '../utils/base64';
 
 export interface SmartContractQueryInput {
   contractIndex: number;
@@ -11,6 +12,6 @@ export const querySmartContract = async (httpClient: HttpApiClient, input: Smart
     contractIndex: input.contractIndex,
     inputType: input.inputType ?? 0,
     inputSize: input.payload?.byteLength ?? 0,
-    requestData: input.payload ? Buffer.from(input.payload).toString('base64') : undefined
+    requestData: input.payload ? bytesToBase64(input.payload) : undefined
   });
 };
