@@ -41,8 +41,6 @@ describe('createBalanceWatcher', () => {
     await vi.advanceTimersByTimeAsync(35);
     watcher.stop();
     vi.useRealTimers();
-    // Current watcher implementation only emits on changes; initial snapshot support will be
-    // added in a later phase.
-    expect(values).toEqual(['2']);
+    expect(values).toEqual(['1', '2']);
   });
 });

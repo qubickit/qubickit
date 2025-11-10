@@ -86,7 +86,7 @@ export function createTransportHooksRegistry<TParams = unknown, TResult = unknow
 
 export async function runWithTransportHooks<TParams = unknown, TResult = unknown>(
   registry: TransportHooksRegistry<TParams, TResult>,
-  executor: () => Promise<TResult>,
+  executor: (ctx: { signal?: AbortSignal }) => Promise<TResult>,
   options: TransportCallOptions<TParams>
 ): Promise<TResult> {
   const attempt = options.attempt ?? 1;
@@ -101,7 +101,7 @@ export async function runWithTransportHooks<TParams = unknown, TResult = unknown
   await registry.runBefore(baseContext);
   const startedAt = now();
   try {
-    const result = await executor();
+    const result = await executor({ signal: options.signal });
     await registry.runAfter({
       ...baseContext,
       result,

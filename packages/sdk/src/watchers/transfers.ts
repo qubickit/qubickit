@@ -38,7 +38,11 @@ export function createTransferWatcher(session: SessionClient, options: TransferW
   let stopped = false;
   const seenHashes = new Set<string>();
   const seenQueue: string[] = [];
+  const maxSeen = 500;
   let highestTick = 0;
+  let cursor = 0;
+  let idlePolls = 0;
+  const pageSize = Math.max(1, options.limit ?? 25);
 
   const remember = (hash: string, tick?: number) => {
     seenHashes.add(hash);
@@ -46,7 +50,7 @@ export function createTransferWatcher(session: SessionClient, options: TransferW
     if (typeof tick === 'number') {
       highestTick = Math.max(highestTick, tick);
     }
-    if (seenQueue.length > 200) {
+    if (seenQueue.length > maxSeen) {
       const old = seenQueue.shift();
       if (old) {
         seenHashes.delete(old);
@@ -58,32 +62,36 @@ export function createTransferWatcher(session: SessionClient, options: TransferW
     while (!stopped) {
       try {
         options.telemetry?.onPoll?.({ identity: options.identity });
-        const response = await session.listTransactions(options.identity, {
-          limit: options.limit ?? 25,
+        const requestOptions: Parameters<SessionClient['listTransactions']>[1] = {
+          limit: pageSize,
           cacheTtlMs: 0
-        });
+        };
+        if (cursor > 0) {
+          requestOptions.from = cursor;
+        }
+        const response = await session.listTransactions(options.identity, { ...requestOptions, signal: options.signal });
         const transactions = (response.transactions as TransferTransaction[]) ?? [];
-        const newestFirst = [...transactions].sort((a, b) => {
-          const aTick = a.tickNumber ?? 0;
-          const bTick = b.tickNumber ?? 0;
-          return bTick - aTick;
-        });
-        const fresh = newestFirst.filter((tx) => {
-          const hash = extractTransactionHash(tx);
-          if (!hash) return false;
-          if (seenHashes.has(hash)) return false;
-          if (typeof tx.tickNumber === 'number' && tx.tickNumber < highestTick) {
-            return false;
+        if (transactions.length === 0) {
+          idlePolls += 1;
+          if (idlePolls >= 5) {
+            cursor = Math.max(0, cursor - pageSize);
+            idlePolls = 0;
           }
-          return true;
-        });
-        for (const tx of fresh.reverse()) {
-          const hash = extractTransactionHash(tx);
-          if (!hash) continue;
-          const event: TransferEvent = { identity: options.identity, transaction: tx };
-          channel.emitData(event);
-          options.telemetry?.onData?.(event);
-          remember(hash, tx.tickNumber);
+        } else {
+          idlePolls = 0;
+          cursor += transactions.length;
+          for (const tx of transactions) {
+            const hash = extractTransactionHash(tx);
+            if (!hash) continue;
+            if (seenHashes.has(hash)) continue;
+            if (typeof tx.tickNumber === 'number' && tx.tickNumber < highestTick) {
+              continue;
+            }
+            const event: TransferEvent = { identity: options.identity, transaction: tx };
+            channel.emitData(event);
+            options.telemetry?.onData?.(event);
+            remember(hash, tx.tickNumber);
+          }
         }
       } catch (error) {
         channel.emitError(error);

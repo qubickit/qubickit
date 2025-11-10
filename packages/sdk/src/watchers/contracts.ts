@@ -22,6 +22,7 @@ export interface ContractWatcherOptions {
   signal?: AbortSignal;
   telemetry?: ContractWatcherTelemetry;
   matcher?: (tx: ContractTransaction) => boolean;
+  from?: number;
 }
 
 export interface ContractEvent {
@@ -45,6 +46,9 @@ export function createContractWatcher(session: SessionClient, options: ContractW
   const channel = new WatchChannel<ContractEvent>();
   let stopped = false;
   const seen = new Set<string>();
+  const queue: string[] = [];
+  const maxSeen = 500;
+  let cursor = options.from ?? 0;
   const matcher =
     options.matcher ??
     ((tx: ContractTransaction) => {
@@ -57,14 +61,24 @@ export function createContractWatcher(session: SessionClient, options: ContractW
         options.telemetry?.onPoll?.(options.contractIdentity);
         const identity = options.identity ?? options.contractIdentity;
         const result = await session.listTransactions(identity, {
+          from: cursor,
           limit: 50,
-          cacheTtlMs: 0
+          cacheTtlMs: 0,
+          signal: options.signal
         });
         const transactions = (result.transactions as ContractTransaction[]) ?? [];
+        cursor += transactions.length;
         for (const tx of transactions) {
           if (!tx?.hash || seen.has(tx.hash)) continue;
           if (!matcher(tx)) continue;
           seen.add(tx.hash);
+          queue.push(tx.hash);
+          if (queue.length > maxSeen) {
+            const oldest = queue.shift();
+            if (oldest) {
+              seen.delete(oldest);
+            }
+          }
           const event: ContractEvent = {
             contractIdentity: options.contractIdentity,
             transaction: tx
