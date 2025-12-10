@@ -5,8 +5,8 @@ import {
 	type QubicClientConfig,
 	type RequestOptions,
 	resolveConfig,
-} from "../config.ts";
-import { QubicError } from "../errors.ts";
+} from "../config";
+import { QubicError } from "../errors";
 import type {
 	pbAssetIssuance,
 	pbAssetIssuances,
@@ -25,8 +25,8 @@ import type {
 	pbPossessedAssetsResponse,
 	pbQuerySmartContractRequest,
 	pbQuerySmartContractResponse,
-} from "../gen/http-types.ts";
-import type { Transport } from "../transport.ts";
+} from "../gen/http-types";
+import type { Transport } from "../transport";
 
 export interface HttpCallOptions extends RequestOptions {
 	query?: Record<string, string | number | boolean | undefined>;

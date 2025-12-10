@@ -1,4 +1,4 @@
-import { fetchTransport, type Transport } from "./transport.ts";
+import { fetchTransport, type Transport } from "./transport";
 
 export interface QubicClientConfig {
 	baseUrl: string;

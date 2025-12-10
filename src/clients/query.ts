@@ -5,8 +5,8 @@ import {
 	type QubicClientConfig,
 	type RequestOptions,
 	resolveConfig,
-} from "../config.ts";
-import { QubicError } from "../errors.ts";
+} from "../config";
+import { QubicError } from "../errors";
 import type {
 	pbGetComputorListsForEpochRequest,
 	pbGetComputorListsForEpochResponse,
@@ -20,8 +20,8 @@ import type {
 	pbGetTransactionsForIdentityResponse,
 	pbGetTransactionsForTickRequest,
 	pbGetTransactionsForTickResponse,
-} from "../gen/query-types.ts";
-import type { Transport } from "../transport.ts";
+} from "../gen/query-types";
+import type { Transport } from "../transport";
 
 export interface QueryClient {
 	transport: Transport;

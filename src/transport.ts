@@ -1,4 +1,4 @@
-import { QubicError, toQubicError } from "./errors.ts";
+import { QubicError, toQubicError } from "./errors";
 
 export type HttpMethod =
 	| "GET"

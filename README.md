@@ -28,9 +28,7 @@ const http = createHttpClient({
   baseUrl: "https://api.qubic.org",
   transport,
 });
-const balance: HttpTypes.pbGetBalanceResponse = await http.getBalance(
-  "IDENTITY"
-);
+const balance = await http.getBalance("IDENTITY");
 
 // JSON-RPC
 const rpc = createRpcClient({
@@ -51,7 +49,8 @@ const txs = await query.getTransactionsForIdentity({ identity: "IDENTITY" });
 
 - `bun run lint` — Biome formatting/lint.
 - `bun test` — Bun test suite with mocked transports.
-- `bun run build` — Emit ESM + `.d.ts` to `dist/` for publishing.
+- `bun run build` — Bundle ESM+CJS+`.d.ts` to `dist/` (tsup).
+- `bun run release` — Lint, test, and build (used by release workflow on tags).
 
 ## Notes
 

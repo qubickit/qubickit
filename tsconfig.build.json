@@ -2,13 +2,16 @@
 	"extends": "./tsconfig.json",
 	"compilerOptions": {
 		"noEmit": false,
-		"emitDeclarationOnly": true,
+		"emitDeclarationOnly": false,
 		"declaration": true,
 		"declarationMap": false,
 		"outDir": "dist",
 		"module": "ESNext",
 		"target": "ESNext",
-		"verbatimModuleSyntax": true
+		"verbatimModuleSyntax": true,
+		"moduleResolution": "bundler",
+		"allowImportingTsExtensions": false,
+		"sourceMap": false
 	},
 	"include": ["src", "index.ts"],
 	"exclude": ["node_modules", "dist", "tests", "scripts", "**/*.test.ts"]

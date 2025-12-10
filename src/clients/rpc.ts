@@ -5,9 +5,9 @@ import {
 	type QubicClientConfig,
 	type RequestOptions,
 	resolveConfig,
-} from "../config.ts";
-import { QubicError } from "../errors.ts";
-import type { Transport } from "../transport.ts";
+} from "../config";
+import { QubicError } from "../errors";
+import type { Transport } from "../transport";
 
 export interface RpcCall {
 	method: string;
