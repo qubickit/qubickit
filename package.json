@@ -1,11 +1,23 @@
 {
-  "name": "qubickit",
-  "module": "index.ts",
-  "type": "module",
-  "devDependencies": {
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
-  }
+	"name": "qubickit",
+	"version": "0.1.0",
+	"module": "index.ts",
+	"type": "module",
+	"devDependencies": {
+		"@types/bun": "latest",
+		"@biomejs/biome": "latest",
+		"husky": "^9.0.0"
+	},
+	"peerDependencies": {
+		"typescript": "^5"
+	},
+	"scripts": {
+		"lint": "bunx @biomejs/biome check .",
+		"test": "bun test",
+		"prepare": "husky install"
+	},
+	"files": [
+		"src",
+		"index.ts"
+	]
 }
