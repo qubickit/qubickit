@@ -32,8 +32,8 @@ export {
 } from "./src/crypto";
 export {
 	deriveKeyPair,
-	derivePrivateKey,
 	deriveKeyPairWithChecksum,
+	derivePrivateKey,
 	type KeyPair,
 	type KeyPairWithChecksum,
 } from "./src/crypto/keys";

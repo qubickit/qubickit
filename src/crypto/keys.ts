@@ -77,10 +77,10 @@ export async function deriveKeyPairWithChecksum(
 	};
 }
 
-export async function deriveKeyPair(
-	seed: string,
-	index = 0,
-): Promise<KeyPair> {
-	const { privateKey, publicKey } = await deriveKeyPairWithChecksum(seed, index);
+export async function deriveKeyPair(seed: string, index = 0): Promise<KeyPair> {
+	const { privateKey, publicKey } = await deriveKeyPairWithChecksum(
+		seed,
+		index,
+	);
 	return { privateKey, publicKey };
 }
