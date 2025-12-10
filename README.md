@@ -51,6 +51,7 @@ const txs = await query.getTransactionsForIdentity({ identity: "IDENTITY" });
 
 - `bun run lint` — Biome formatting/lint.
 - `bun test` — Bun test suite with mocked transports.
+- `bun run build` — Emit ESM + `.d.ts` to `dist/` for publishing.
 
 ## Notes
 

@@ -11,7 +11,6 @@ import type {
 	pbGetComputorListsForEpochRequest,
 	pbGetComputorListsForEpochResponse,
 	pbGetLastProcessedTickResponse,
-	pbGetProcessedTickIntervalsRequest,
 	pbGetProcessedTickIntervalsResponse,
 	pbGetTickDataRequest,
 	pbGetTickDataResponse,
@@ -34,7 +33,6 @@ export interface QueryClient {
 		options?: RequestOptions,
 	): Promise<pbGetLastProcessedTickResponse>;
 	getProcessedTickIntervals(
-		body: pbGetProcessedTickIntervalsRequest,
 		options?: RequestOptions,
 	): Promise<pbGetProcessedTickIntervalsResponse>;
 	getTickData(
@@ -60,6 +58,7 @@ export function createQueryClient(config: QubicClientConfig): QueryClient {
 
 	const request = async <T>(
 		path: string,
+		method: "GET" | "POST",
 		body: unknown,
 		options: RequestOptions = {},
 	): Promise<T> => {
@@ -68,14 +67,16 @@ export function createQueryClient(config: QubicClientConfig): QueryClient {
 			mergeHeaders(resolved.headers, options.headers),
 			resolved,
 		);
-		headers["content-type"] = headers["content-type"] ?? "application/json";
+		if (method === "POST" && body !== undefined && !headers["content-type"]) {
+			headers["content-type"] = "application/json";
+		}
 		if (resolved.userAgent) {
 			headers["user-agent"] = resolved.userAgent;
 		}
 
 		const response = await resolved.transport.request<T>({
 			url,
-			method: "POST",
+			method,
 			headers,
 			body,
 			timeoutMs: options.timeoutMs ?? resolved.timeoutMs,
@@ -97,38 +98,44 @@ export function createQueryClient(config: QubicClientConfig): QueryClient {
 		getComputorListsForEpoch: (body, options) =>
 			request<pbGetComputorListsForEpochResponse>(
 				"/getComputorListsForEpoch",
+				"POST",
 				body,
 				options,
 			),
 		getLastProcessedTick: (options) =>
 			request<pbGetLastProcessedTickResponse>(
 				"/getLastProcessedTick",
-				{},
+				"GET",
+				undefined,
 				options,
 			),
-		getProcessedTickIntervals: (body, options) =>
+		getProcessedTickIntervals: (options) =>
 			request<pbGetProcessedTickIntervalsResponse>(
 				"/getProcessedTickIntervals",
-				body,
+				"GET",
+				undefined,
 				options,
 			),
 		getTickData: (body, options) =>
-			request<pbGetTickDataResponse>("/getTickData", body, options),
+			request<pbGetTickDataResponse>("/getTickData", "POST", body, options),
 		getTransactionByHash: (body, options) =>
 			request<pbGetTransactionByHashResponse>(
 				"/getTransactionByHash",
+				"POST",
 				body,
 				options,
 			),
 		getTransactionsForIdentity: (body, options) =>
 			request<pbGetTransactionsForIdentityResponse>(
 				"/getTransactionsForIdentity",
+				"POST",
 				body,
 				options,
 			),
 		getTransactionsForTick: (body, options) =>
 			request<pbGetTransactionsForTickResponse>(
 				"/getTransactionsForTick",
+				"POST",
 				body,
 				options,
 			),
