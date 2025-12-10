@@ -9,6 +9,19 @@
 			}
 		}
 	},
+	"files": {
+		"includes": [
+			"src/**/*",
+			"tests/**/*",
+			"scripts/**/*.cjs",
+			"index.ts",
+			"biome.json",
+			"package.json",
+			"README.md",
+			".better-commits.json"
+		],
+		"ignoreUnknown": true
+	},
 	"formatter": {
 		"enabled": true
 	}
