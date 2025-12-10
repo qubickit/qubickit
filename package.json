@@ -28,7 +28,7 @@
 		"lint": "bunx @biomejs/biome check .",
 		"build": "tsup index.ts --format esm,cjs --dts --out-dir dist --sourcemap false --clean",
 		"test": "bun test tests",
-		"release": "bun run lint && bun test && bun run build",
+		"release": "bun run lint && bun run test && bun run build",
 		"prepare": "husky install"
 	},
 	"files": [
