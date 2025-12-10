@@ -18,6 +18,45 @@ export {
 	resolveConfig,
 } from "./src/config";
 export {
+	CHECKSUM_LENGTH,
+	type CryptoRuntime,
+	DIGEST_LENGTH,
+	default as crypto,
+	KECCAK_STATE_LENGTH,
+	type KeyExchange,
+	NONCE_LENGTH,
+	PRIVATE_KEY_LENGTH,
+	PUBLIC_KEY_LENGTH,
+	type SchnorrQ,
+	SIGNATURE_LENGTH,
+} from "./src/crypto";
+export {
+	deriveKeyPair,
+	derivePrivateKey,
+	deriveKeyPairWithChecksum,
+	type KeyPair,
+	type KeyPairWithChecksum,
+} from "./src/crypto/keys";
+export {
+	type ContractCall,
+	type EncodedContractCall,
+	encodeContractCall,
+} from "./src/encoding/contracts";
+export {
+	type IdentityOptions,
+	identityFromPublicKey,
+	publicKeyFromIdentity,
+	verifyIdentity,
+} from "./src/encoding/identity";
+export {
+	deserializeTransaction,
+	type EncodedTransaction,
+	serializeTransaction,
+	signTransaction,
+	type TransactionPayload,
+	verifyTransactionSignature,
+} from "./src/encoding/transaction";
+export {
 	QubicError,
 	type QubicErrorCode,
 	type QubicErrorDetails,

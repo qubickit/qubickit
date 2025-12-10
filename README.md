@@ -32,17 +32,44 @@ const balance = await http.getBalance("IDENTITY");
 
 // JSON-RPC
 const rpc = createRpcClient({
-  baseUrl: "https://rpc.qubic.org",
-  transport,
+	baseUrl: "https://rpc.qubic.org",
+	transport,
 });
 const info = await rpc.call("getNodeInfo", []);
 
 // Query V2
 const query = createQueryClient({
-  baseUrl: "https://query.qubic.org",
-  transport,
+	baseUrl: "https://query.qubic.org",
+	transport,
 });
 const txs = await query.getTransactionsForIdentity({ identity: "IDENTITY" });
+
+// Keys, identities, signing
+import {
+	deriveKeyPair,
+	identityFromPublicKey,
+	signTransaction,
+	serializeTransaction,
+	verifyTransactionSignature,
+} from "qubickit";
+
+const { privateKey, publicKey } = await deriveKeyPair(
+	"abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxy",
+);
+const identity = await identityFromPublicKey(publicKey);
+const { bytes } = await signTransaction(
+	{
+		sourcePublicKey: publicKey,
+		destinationPublicKey: publicKey,
+		amount: 1n,
+		tick: 123,
+		inputType: 0,
+		payload: new Uint8Array(),
+	},
+	privateKey,
+);
+const parsed = deserializeTransaction(bytes);
+const ok = await verifyTransactionSignature(parsed);
 ```
 
 ## Scripts

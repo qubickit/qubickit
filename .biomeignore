@@ -4,3 +4,4 @@ dist/**
 dist
 src/gen
 tmp_*.js
+src/crypto/libFourQ_K12.js

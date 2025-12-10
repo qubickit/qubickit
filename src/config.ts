@@ -21,7 +21,7 @@ export type ResolvedConfig = QubicClientConfig & {
 	transport: Transport;
 	headers: Record<string, string>;
 	timeoutMs: number;
-	userAgent: string;
+	userAgent?: string;
 };
 
 export function resolveConfig(config: QubicClientConfig): ResolvedConfig {
@@ -31,7 +31,7 @@ export function resolveConfig(config: QubicClientConfig): ResolvedConfig {
 		transport,
 		headers: config.headers ?? {},
 		timeoutMs: config.timeoutMs ?? 30_000,
-		userAgent: config.userAgent ?? "qubickit/0.0.0",
+		userAgent: config.userAgent,
 	};
 }
 

@@ -11,8 +11,8 @@
 	},
 	"files": {
 		"includes": [
-			"src/**/*",
-			"tests/**/*",
+			"src/**/*.ts",
+			"tests/**/*.ts",
 			"scripts/**/*.cjs",
 			"index.ts",
 			"biome.json",
