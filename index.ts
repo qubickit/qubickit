@@ -62,6 +62,7 @@ export {
 	type QubicErrorDetails,
 	toQubicError,
 } from "./src/errors";
+export * as ContractTypes from "./src/gen/contracts";
 export * as HttpTypes from "./src/gen/http-types";
 export * as QueryTypes from "./src/gen/query-types";
 export {

@@ -1,0 +1,69 @@
+name: refresh-contracts
+
+on:
+  schedule:
+    # Every Wednesday at 18:00 UTC
+    - cron: "0 18 * * 3"
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout qubic/core contracts
+        uses: actions/checkout@v4
+        with:
+          repository: qubic/core
+          ref: main
+          path: core-src
+          sparse-checkout: |
+            src/contracts
+          sparse-checkout-cone-mode: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "latest"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Update registry from bundle
+        run: |
+          curl -fsSL https://static.qubic.org/v1/general/data/bundle.json -o scripts/contract-registry.json
+
+      - name: Regenerate contracts
+        env:
+          CONTRACTS_DIR: ${{ github.workspace }}/core-src/src/contracts
+        run: node scripts/gen-contracts.cjs
+
+      - name: Lint, test, build
+        run: |
+          bun run lint
+          bun test tests
+          bun run build
+
+      - name: Detect changes
+        id: diffcheck
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create PR if changes
+        if: steps.diffcheck.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore(contracts): refresh generated contracts"
+          title: "chore(contracts): refresh generated contracts"
+          body: |
+            Automated refresh of generated contracts and registry.
+          branch: chore/refresh-contracts

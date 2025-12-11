@@ -8,6 +8,7 @@ tmp/
 out
 dist
 *.tgz
+info.md
 
 # code coverage
 coverage

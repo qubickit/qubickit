@@ -1,5 +1,5 @@
 {
-	"name": "qubickit",
+	"name": "@qubics/kit",
 	"version": "0.1.0",
 	"type": "module",
 	"main": "dist/index.cjs",
@@ -25,7 +25,7 @@
 		"typescript": "^5"
 	},
 	"scripts": {
-		"lint": "bunx @biomejs/biome check .",
+		"lint": "bunx @biomejs/biome check index.ts src/clients src/config.ts src/crypto src/encoding src/errors.ts src/transport.ts tests scripts/gen-*.cjs package.json README.md biome.json .better-commits.json",
 		"build": "tsup index.ts --format esm,cjs --dts --out-dir dist --sourcemap false --clean",
 		"test": "bun test tests",
 		"release": "bun run lint && bun run test && bun run build",

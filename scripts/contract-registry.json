@@ -1,0 +1,76 @@
+{
+	"smart_contracts": [
+		{
+			"contractIndex": 1,
+			"githubUrl": "https://github.com/qubic/core/blob/main/src/contracts/Qx.h"
+		},
+		{
+			"contractIndex": 2,
+			"githubUrl": "https://github.com/qubic/core/blob/main/src/contracts/Quottery.h"
+		},
+		{
+			"contractIndex": 3,
+			"githubUrl": "https://github.com/qubic/core/blob/main/src/contracts/Random.h"
+		},
+		{
+			"contractIndex": 4,
+			"githubUrl": "https://github.com/qubic/core/blob/main/src/contracts/QUtil.h"
+		},
+		{
+			"contractIndex": 5,
+			"githubUrl": "https://github.com/qubic/core/blob/main/src/contracts/MyLastMatch.h"
+		},
+		{
+			"contractIndex": 6,
+			"githubUrl": "https://github.com/qubic/core/blob/main/src/contracts/GeneralQuorumProposal.h"
+		},
+		{
+			"contractIndex": 7,
+			"githubUrl": "https://github.com/qubic/core/blob/main/src/contracts/SupplyWatcher.h"
+		},
+		{
+			"contractIndex": 8,
+			"githubUrl": "https://github.com/qubic/core/blob/main/src/contracts/ComputorControlledFund.h"
+		},
+		{
+			"contractIndex": 9,
+			"githubUrl": "https://github.com/qubic/core/blob/main/src/contracts/Qearn.h"
+		},
+		{
+			"contractIndex": 10,
+			"githubUrl": "https://github.com/qubic/core/blob/main/src/contracts/QVAULT.h"
+		},
+		{
+			"contractIndex": 11,
+			"githubUrl": "https://github.com/qubic/core/blob/main/src/contracts/MsVault.h"
+		},
+		{
+			"contractIndex": 12,
+			"githubUrl": "https://github.com/qubic/core/blob/main/src/contracts/Qbay.h"
+		},
+		{
+			"contractIndex": 13,
+			"githubUrl": "https://github.com/qubic/core/blob/main/src/contracts/Qswap.h"
+		},
+		{
+			"contractIndex": 14,
+			"githubUrl": "https://github.com/qubic/core/blob/main/src/contracts/Nostromo.h"
+		},
+		{
+			"contractIndex": 15,
+			"githubUrl": "https://github.com/qubic/core/blob/main/src/contracts/Qdraw.h"
+		},
+		{
+			"contractIndex": 16,
+			"githubUrl": "https://github.com/qubic/core/blob/main/src/contracts/RandomLottery.h"
+		},
+		{
+			"contractIndex": 17,
+			"githubUrl": "https://github.com/qubic/core/blob/main/src/contracts/QBond.h"
+		},
+		{
+			"contractIndex": 18,
+			"githubUrl": "https://github.com/qubic/core/blob/main/src/contracts/QIP.h"
+		}
+	]
+}
