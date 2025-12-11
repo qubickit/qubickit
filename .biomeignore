@@ -3,5 +3,6 @@ dist
 dist/**
 dist
 src/gen
+src/gen/**
 tmp_*.js
 src/crypto/libFourQ_K12.js

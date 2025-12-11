@@ -13,13 +13,13 @@ bun install qubickit
 
 ```ts
 import {
-  createHttpClient,
-  createRpcClient,
-  createQueryClient,
-  fetchTransport,
-  HttpTypes,
-  QueryTypes,
-} from "qubickit";
+	createHttpClient,
+	createRpcClient,
+	createQueryClient,
+	fetchTransport,
+	HttpTypes,
+	QueryTypes,
+} from "@qubics/kit";
 
 const transport = fetchTransport();
 
@@ -51,7 +51,8 @@ import {
 	signTransaction,
 	serializeTransaction,
 	verifyTransactionSignature,
-} from "qubickit";
+} from "qubic-ts";
+} from "@qubics/kit";
 
 const { privateKey, publicKey } = await deriveKeyPair(
 	"abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxy",
