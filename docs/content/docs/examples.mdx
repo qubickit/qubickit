@@ -1,0 +1,73 @@
+---
+title: Examples
+description: Common end-to-end flows
+toc:
+  float: true
+---
+
+## Fetch balance via HTTP
+```ts
+const http = createHttpClient({ baseUrl: "https://api.qubic.org", transport });
+const { balance } = await http.getBalance("IDENTITY");
+```
+
+## Query transactions for identity
+```ts
+const query = createQueryClient({ baseUrl: "https://query.qubic.org", transport });
+const txs = await query.getTransactionsForIdentity({ identity: "IDENTITY" });
+```
+
+## JSON-RPC batch with errors
+```ts
+const rpc = createRpcClient({ baseUrl: "https://rpc.qubic.org", transport });
+const [ok, err] = await rpc.batch([{ method: "ping" }, { method: "bad" }]);
+```
+
+## Contract function + procedure payload
+```ts
+const qx = ContractTypes.Qx.createClient(query);
+
+const asks = await qx.functions.EntityAskOrders({
+  entity: new Uint8Array(32),
+  offset: 0n,
+  limit: 10n,
+});
+
+const { inputType, payload } = qx.procedures.PlaceAskOrder({
+  entity: new Uint8Array(32),
+  price: 1_000n,
+  numberOfShares: 5n,
+});
+// Sign and broadcast using transaction helpers (see /docs/broadcast)
+```
+
+## Sign and verify a transaction
+```ts
+const { privateKey, publicKey } = await deriveKeyPair("seed...");
+const { bytes: signed } = await signTransaction(
+  {
+    sourcePublicKey: publicKey,
+    destinationPublicKey: publicKey,
+    amount: 123n,
+    tick: 42,
+    inputType: 0,
+    payload: new Uint8Array(),
+  },
+  privateKey,
+);
+
+const ok = await verifyTransactionSignature(signed);
+```
+
+## Broadcast a signed transaction
+See `/docs/broadcast` for the full flow. In short:
+
+```ts
+const http = createHttpClient({ baseUrl: "https://api.qubic.org", transport });
+
+const res = await http.broadcastTransaction({
+  encodedTransaction: Buffer.from(signed).toString("base64"),
+});
+
+console.log(res.transactionId);
+```

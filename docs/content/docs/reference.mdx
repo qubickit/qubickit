@@ -1,0 +1,43 @@
+---
+title: API Reference Map
+description: 1:1 coverage of qubickit surfaces
+toc:
+  float: true
+---
+
+This page links to every major surface exported by qubickit (@qubics/kit on npm). Most return types are inferred, but type tables are linked where helpful.
+
+## Core
+- Config: `QubicClientConfig`, `resolveConfig`, `mergeHeaders`, `buildUrl`, `applyAuthHeader`
+- Transport: `Transport`, `TransportRequest`, `TransportResponse`, `fetchTransport`
+- Errors: `QubicError`, `QubicErrorCode`, `QubicErrorDetails`, `toQubicError`
+
+## Clients
+- HTTP: `createHttpClient`, `HttpClient`, `HttpCallOptions`
+- RPC: `createRpcClient`, `RpcClient`, `RpcCall`
+- Query V2: `createQueryClient`, `QueryClient`
+- Types: `HttpTypes.*`, `QueryTypes.*`
+- HTTP helpers: `getBalance`, `getAssetIssuances`, `getOwnedAssets`, `getIssuedAssets`, `getPossessedAssets`, `broadcastTransaction`, `querySmartContract`
+- Query helpers: `getTickData`, `getTransactionsForIdentity`, `getTransactionByHash`, `getTransactionsForTick`
+
+## Contracts
+- Generated surfaces under `ContractTypes.*` (functions, procedures, `createClient`, registry-backed `contractIndex`)
+- Helpers: `encodeContractCall`, `ContractCall`, `EncodedContractCall`
+- Regen scripts: `scripts/gen-contracts.cjs`, `scripts/contract-registry.json` (CI refresh weekly)
+
+## Encoding
+- Identity: `identityFromPublicKey`, `verifyIdentity`, `publicKeyFromIdentity`, `IdentityOptions`
+- Contracts encoding: `encodeContractCall`
+- Transactions: `serializeTransaction`, `deserializeTransaction`, `signTransaction`, `verifyTransactionSignature`, `EncodedTransaction`, `TransactionPayload`
+
+## Crypto
+- Keys: `deriveKeyPair`, `derivePrivateKey`, `deriveKeyPairWithChecksum`, `KeyPair`, `KeyPairWithChecksum`
+- Constants: `DIGEST_LENGTH`, `PUBLIC_KEY_LENGTH`, `SIGNATURE_LENGTH`, etc.
+- Runtimes: `crypto` (schnorr/fourQ, k12)
+
+## Tests & utilities
+- Mocking: any `Transport` implementation works (see `/docs/testing` for patterns)
+- Broadcast flow: `/docs/broadcast`
+- Examples: `/docs/examples`
+
+For detailed shapes, see `/docs/types`. For usage guides, start at `/docs/index` or `/docs/navigation`.

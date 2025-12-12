@@ -1,0 +1,40 @@
+---
+title: Contracts
+description: Generated bindings with functions and procedures
+toc:
+  float: true
+---
+
+Contracts are generated from `qubic/core` and the registry. Each contract exports:
+- `contract` (name + `contractIndex` from registry)
+- `functions` (read-only, via `querySmartContract`)
+- `procedures` (payload builders for transactions)
+- `createClient` (binds a query client and contract index)
+
+## Using a contract
+```ts
+import { ContractTypes } from "qubickit";
+
+const qx = ContractTypes.Qx.createClient(query); // uses registry contractIndex, override with { contractIndex }
+
+// Function (read-only)
+const orders = await qx.functions.EntityAskOrders({
+  entity: new Uint8Array(32),
+  offset: 0n,
+  limit: 20n,
+});
+
+// Procedure payload for signing
+const { inputType, payload } = qx.procedures.PlaceAskOrder({
+  entity: new Uint8Array(32),
+  price: 1_000n,
+  numberOfShares: 5n,
+});
+// embed inputType/payload into your transaction serialize/sign/broadcast flow
+// see /docs/broadcast for signing and sending
+```
+
+## Refresh cadence
+- Contracts and registry are refreshed weekly via CI (Wednesday 18:00 UTC).
+- For local regen: `node scripts/gen-contracts.cjs` (optionally set `CONTRACTS_DIR` to a fresh qubic/core clone).
+- Registry indices are sourced from `scripts/contract-registry.json` (auto-updated in CI); override with `createClient(query, { contractIndex })` if needed.

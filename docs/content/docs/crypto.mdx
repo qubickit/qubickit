@@ -1,0 +1,59 @@
+---
+title: Crypto & Identities
+description: Keys, identities, transaction serialize/sign/verify
+toc:
+  float: true
+---
+
+## Keys and identities
+```ts
+import {
+  deriveKeyPair,
+  derivePrivateKey,
+  identityFromPublicKey,
+  verifyIdentity,
+  publicKeyFromIdentity,
+} from "qubickit";
+
+const { privateKey, publicKey } = await deriveKeyPair("your-seed...");
+const identity = await identityFromPublicKey(publicKey);
+const ok = await verifyIdentity(identity);
+const decoded = publicKeyFromIdentity(identity);
+```
+
+## Transactions
+```ts
+import {
+  serializeTransaction,
+  signTransaction,
+  verifyTransactionSignature,
+} from "qubickit";
+
+const unsigned = serializeTransaction({
+  sourcePublicKey: publicKey,
+  destinationPublicKey: publicKey,
+  amount: 123n,
+  tick: 42,
+  inputType: 0,
+  payload: new Uint8Array(),
+});
+
+const { bytes: signed } = await signTransaction(
+  {
+    sourcePublicKey: publicKey,
+    destinationPublicKey: publicKey,
+    amount: 123n,
+    tick: 42,
+    inputType: 0,
+    payload: new Uint8Array(),
+  },
+  privateKey,
+);
+
+const valid = await verifyTransactionSignature(signed);
+```
+
+## Notes
+- Public endpoints do not require auth; contract procedure payloads still need to be signed and broadcast as transactions.
+- Crypto runtimes rely on bundled WASM (FourQ/K12) and work in Node and modern browsers.
+- Constants: `DIGEST_LENGTH`, `PUBLIC_KEY_LENGTH`, `SIGNATURE_LENGTH`, `PRIVATE_KEY_LENGTH`, `NONCE_LENGTH`.

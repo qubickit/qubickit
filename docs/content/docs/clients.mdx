@@ -1,0 +1,66 @@
+---
+title: Clients
+description: Call HTTP partner API, Query V2, and JSON-RPC
+toc:
+  float: true
+---
+
+## Transport and config
+- `fetchTransport()` is the default; it auto-parses JSON by `content-type`, supports timeouts via AbortController, and works in Node 18+ and browsers.
+- You can pass a custom fetch: `fetchTransport(customFetch)` or a custom `Transport` implementation.
+- Options: `headers`, `userAgent`, `timeoutMs`. Public endpoints do not require auth.
+
+## HTTP partner API
+```ts
+const http = createHttpClient({ baseUrl: "https://api.qubic.org", transport });
+
+const balance = await http.getBalance("IDENTITY");
+const issuances = await http.getAssetIssuances({ issuerIdentity: "ID" });
+
+await http.broadcastTransaction({ encodedTransaction: "..." });
+await http.querySmartContract({
+  contractIndex: 1,
+  inputType: 5,
+  inputSize: 0,
+  requestData: "",
+});
+```
+
+## JSON-RPC
+```ts
+const rpc = createRpcClient({ baseUrl: "https://rpc.qubic.org", transport });
+
+const nodeInfo = await rpc.call("getNodeInfo", []);
+const [ok, err] = await rpc.batch([{ method: "ping" }, { method: "bad" }]); // errors become QubicError
+```
+
+## Query V2
+```ts
+const query = createQueryClient({ baseUrl: "https://query.qubic.org", transport });
+
+const tick = await query.getTickData({ tickNumber: 123 });
+const txs = await query.getTransactionsForIdentity({ identity: "IDENTITY" });
+```
+
+### Tips
+- Returns are typed; you usually don’t need explicit annotations.
+- Errors surface as `QubicError` with `status`/`details` where available.
+
+### Categories
+- HTTP partner API: balances, assets, broadcast, `querySmartContract`
+- JSON-RPC: node info, batches, errors surfaced as `QubicError`
+- Query V2: tick/transaction queries with base64 handled for you
+
+### HTTP helper methods
+- `getBalance(id)` -> balance
+- `getAssetIssuances(params)` -> issuances list
+- `getOwnedAssets(id)`, `getIssuedAssets(id)`, `getPossessedAssets(id)`
+- `broadcastTransaction(body)` -> peersBroadcasted, transactionId
+- `querySmartContract(body)` -> base64 responseData
+
+### Query V2 methods
+- `getTickData`, `getTransactionsForIdentity`, `getTransactionByHash`, `getTransactionsForTick`
+
+### JSON-RPC usage
+- `call(method, params)` for single call
+- `batch([{ method, params }, ...])` returns results/errors aligned to requests

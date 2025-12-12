@@ -1,0 +1,9 @@
+# exclude local apps and auxiliary artifacts from npm package
+docs
+docs/**
+tmp
+tmp/**
+core-src
+core-src/**
+bundle.json
+bundle_utf8.json

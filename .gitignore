@@ -9,6 +9,7 @@ out
 dist
 *.tgz
 info.md
+bundle.json
 
 # code coverage
 coverage

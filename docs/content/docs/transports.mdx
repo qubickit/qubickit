@@ -1,0 +1,39 @@
+---
+title: Transports
+description: Using fetchTransport and custom transports
+toc:
+  float: true
+---
+
+## Default: fetchTransport
+- Uses global `fetch` (Node 18+/browser) or a provided `fetch`.
+- Auto-parses JSON when `content-type` includes `application/json`.
+- Supports timeouts via AbortController (if available).
+- Returns `{ status, headers, data, raw }`; throws `QubicError` on non-2xx.
+
+```ts
+import { fetchTransport } from "qubickit";
+
+const transport = fetchTransport(); // or fetchTransport(customFetch)
+```
+
+## Custom transport
+Implement the `Transport` interface:
+
+```ts
+import type { Transport, TransportRequest, TransportResponse } from "qubickit";
+
+class MemoryTransport implements Transport {
+  async request<T>(options: TransportRequest): Promise<TransportResponse<T>> {
+    // your logic here
+    return { status: 200, headers: {}, data: {} as T };
+  }
+}
+
+const transport = new MemoryTransport();
+```
+
+Useful for:
+- Tests/mocking
+- Locked-down environments without global fetch
+- Instrumentation/logging
