@@ -35,7 +35,8 @@ jobs:
 
       - name: Update registry from bundle
         run: |
-          curl -fsSL https://static.qubic.org/v1/general/data/bundle.json -o scripts/contract-registry.json
+          curl -fsSL https://static.qubic.org/v1/general/data/bundle.json \
+            | jq '{ smart_contracts }' > scripts/contract-registry.json
 
       - name: Regenerate contracts
         env:

@@ -1,0 +1,131 @@
+---
+title: Overview
+description: What qubickit (@qubics/kit on npm) is and how to get started quickly
+icon: Compass
+toc:
+  float: true
+---
+
+`qubickit` (npm: `@qubics/kit`) is a TypeScript SDK for Qubic:
+
+- Typed clients for HTTP partner API, Query V2, and JSON-RPC
+- Generated contract bindings with registry-backed contract indices
+- Crypto helpers for keys, identities, and transaction signing
+- Works in Node 18+ and browsers via `fetchTransport`
+
+## Build with the SDK
+
+<Steps>
+  <Steps.Step title="Install the toolkit">
+    Run <code>npm install @qubics/kit</code>, add it to your preferred package manager, and keep your TypeScript and bundler outputs aligned.
+  </Steps.Step>
+  <Steps.Step title="Configure transports once">
+    Create a shared <code>fetchTransport</code> (or your own implementation), point it at the right base URLs, and reuse it across HTTP, Query, RPC, and contract bindings.
+  </Steps.Step>
+  <Steps.Step title="Ship production flows">
+    Combine typed client calls, generated procedures, and crypto helpers to sign and broadcast transactions from one toolkit.
+  </Steps.Step>
+</Steps>
+
+## Quickstart
+
+```ts
+import {
+  createHttpClient,
+  createQueryClient,
+  createRpcClient,
+  fetchTransport,
+  ContractTypes,
+} from "qubickit";
+
+const transport = fetchTransport();
+
+const http = createHttpClient({ baseUrl: "https://api.qubic.org", transport });
+const balance = await http.getBalance("IDENTITY");
+
+const rpc = createRpcClient({ baseUrl: "https://rpc.qubic.org", transport });
+const info = await rpc.call("getNodeInfo", []);
+
+const query = createQueryClient({ baseUrl: "https://query.qubic.org", transport });
+const txs = await query.getTransactionsForIdentity({ identity: "IDENTITY" });
+
+// Contract function (uses registry contractIndex)
+const qx = ContractTypes.Qx.createClient(query);
+const orders = await qx.functions.EntityAskOrders({
+  entity: new Uint8Array(32),
+  offset: 0n,
+  limit: 20n,
+});
+```
+
+## Install
+
+```bash
+npm install @qubics/kit
+# or pnpm add / bun add @qubics/kit
+```
+
+Peer dep: TypeScript >= 5. Outputs: ESM + CJS + dts.
+
+## Clients at a glance
+
+- **HTTP partner API**: balances, assets, broadcast, `querySmartContract`.
+- **JSON-RPC**: single call + batch; errors surfaced as `QubicError`.
+- **Query V2**: tick data and transactions; base64 handled for you.
+- **Transports**: `fetchTransport()` by default; pass a custom fetch/transport if needed (e.g., tests or restricted envs).
+
+## Contracts
+
+- Generated bindings live under `ContractTypes.*` (registry-backed `contractIndex` with override).
+- `functions` call `querySmartContract` and decode outputs.
+- `procedures` build `{ inputType, payload }` for transaction signing/broadcast.
+
+Example:
+```ts
+const qswap = ContractTypes.Qswap.createClient(query);
+const pool = await qswap.functions.GetPoolBasicState({
+  assetIssuer: new Uint8Array(32),
+  assetName: 123n,
+});
+
+const { inputType, payload } = qswap.procedures.AddLiquidity({
+  _contractIndex: qswap.contractIndex,
+  _type: 0,
+  assetIssuer: new Uint8Array(32),
+  assetName: 123n,
+  userIncreaseLiquidity: 1_000_000n,
+  quAmount: 500_000n,
+  assetAmount: 50_000n,
+  _terminator: 0,
+});
+// Sign and broadcast using transaction helpers.
+```
+
+## Crypto & identities
+
+- Keys: `deriveKeyPair`, `derivePrivateKey`, checksum variant.
+- Identities: `identityFromPublicKey`, `verifyIdentity`, `publicKeyFromIdentity`.
+- Transactions: `serializeTransaction`, `signTransaction`, `verifyTransactionSignature`.
+
+## Continue exploring
+
+<Cards>
+  <Card title="Clients & config" href="/docs/clients">
+    Call HTTP, JSON-RPC, and Query APIs with one transport.
+  </Card>
+  <Card title="Transports" href="/docs/transports">
+    Swap transports, custom fetch implementations, and retries safely.
+  </Card>
+  <Card title="Contracts & broadcasting" href="/docs/contracts">
+    Generate bindings, build procedures, and send transactions.
+  </Card>
+  <Card title="Crypto & signing" href="/docs/crypto">
+    Keys, identities, transaction serialization, and signature helpers.
+  </Card>
+  <Card title="Examples & testing" href="/docs/examples">
+    Learn patterns for exercising client flows and mocking transports.
+  </Card>
+  <Card title="Types & reference" href="/docs/types">
+    Browse exported types, errors, and helpers through auto-generated tables.
+  </Card>
+</Cards>
