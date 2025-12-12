@@ -34,23 +34,43 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Update registry from bundle
+        id: registry
         run: |
+          set -euo pipefail
+          REGISTRY_PATH="scripts/contract-registry.json"
+          BEFORE_HASH="none"
+          if [ -f "$REGISTRY_PATH" ]; then
+            BEFORE_HASH=$(sha256sum "$REGISTRY_PATH" | cut -d ' ' -f 1)
+          fi
           curl -fsSL https://static.qubic.org/v1/general/data/bundle.json \
-            | jq '{ smart_contracts: [ .smart_contracts[] | { contractIndex, githubUrl } ] }' \
-            > scripts/contract-registry.json
+            | jq '{ smart_contracts: ( [ .smart_contracts[] | { contractIndex, githubUrl } ] | sort_by([.contractIndex, .githubUrl]) ) }' \
+            > "$REGISTRY_PATH"
+          AFTER_HASH=$(sha256sum "$REGISTRY_PATH" | cut -d ' ' -f 1)
+          if [ "$BEFORE_HASH" = "$AFTER_HASH" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Registry unchanged
+        if: steps.registry.outputs.changed != 'true'
+        run: echo "Registry unchanged; skipping regeneration."
 
       - name: Regenerate contracts
+        if: steps.registry.outputs.changed == 'true'
         env:
           CONTRACTS_DIR: ${{ github.workspace }}/core-src/src/contracts
         run: node scripts/gen-contracts.cjs
 
       - name: Lint, test, build
+        if: steps.registry.outputs.changed == 'true'
         run: |
           bun run lint
           bun test tests
           bun run build
 
       - name: Detect changes
+        if: steps.registry.outputs.changed == 'true'
         id: diffcheck
         run: |
           if git diff --quiet; then
@@ -60,7 +80,7 @@ jobs:
           fi
 
       - name: Create PR if changes
-        if: steps.diffcheck.outputs.changed == 'true'
+        if: steps.registry.outputs.changed == 'true' && steps.diffcheck.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}

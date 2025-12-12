@@ -124,7 +124,8 @@ function main() {
 	fs.rmSync(OUT_DIR, { recursive: true, force: true });
 	const files = fs
 		.readdirSync(CONTRACTS_DIR)
-		.filter((f) => f.endsWith(".h") && /^[A-Z]/.test(f) && f !== "qpi.h");
+		.filter((f) => f.endsWith(".h") && /^[A-Z]/.test(f) && f !== "qpi.h")
+		.sort((a, b) => a.localeCompare(b));
 	const contractDefs = [];
 
 	for (const file of files) {
@@ -163,6 +164,15 @@ function main() {
 			structs,
 		});
 	}
+
+	contractDefs.sort((a, b) => {
+		const indexA = a.contractIndex ?? Number.MAX_SAFE_INTEGER;
+		const indexB = b.contractIndex ?? Number.MAX_SAFE_INTEGER;
+		if (indexA === indexB) {
+			return a.contract.localeCompare(b.contract);
+		}
+		return indexA - indexB;
+	});
 
 	fs.mkdirSync(OUT_DIR, { recursive: true });
 
