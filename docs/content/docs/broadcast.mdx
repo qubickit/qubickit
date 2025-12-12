@@ -1,0 +1,79 @@
+---
+title: Broadcasting transactions
+description: From payload to signed bytes to broadcast
+toc:
+  float: true
+---
+
+## 1) Build procedure payload (if using contracts)
+Use a contract procedure builder to get `{ inputType, payload }`:
+
+```ts
+import { ContractTypes } from "qubickit";
+const qx = ContractTypes.Qx.createClient(query);
+
+const { inputType, payload } = qx.procedures.PlaceAskOrder({
+  entity: new Uint8Array(32),
+  price: 1_000n,
+  numberOfShares: 5n,
+});
+```
+
+If you’re not using a contract, prepare your own `inputType` and `payload` bytes as required.
+
+## 2) Serialize transaction
+
+```ts
+import { serializeTransaction } from "qubickit";
+
+const unsigned = serializeTransaction({
+  sourcePublicKey: publicKey,
+  destinationPublicKey: destinationPublicKey,
+  amount: 123n,
+  tick: 42,
+  inputType,        // from step 1 (or your own)
+  payload,          // from step 1 (or your own)
+});
+```
+
+## 3) Sign transaction
+
+```ts
+import { signTransaction } from "qubickit";
+
+const { bytes: signed } = await signTransaction(
+  {
+    sourcePublicKey: publicKey,
+    destinationPublicKey,
+    amount: 123n,
+    tick: 42,
+    inputType,
+    payload,
+  },
+  privateKey,
+);
+```
+
+## 4) Verify (optional sanity check)
+
+```ts
+import { verifyTransactionSignature } from "qubickit";
+const ok = await verifyTransactionSignature(signed);
+```
+
+## 5) Broadcast over HTTP partner API
+
+```ts
+const http = createHttpClient({ baseUrl: "https://api.qubic.org", transport });
+
+const res = await http.broadcastTransaction({
+  encodedTransaction: Buffer.from(signed).toString("base64"),
+});
+
+console.log(res.transactionId);
+```
+
+### Notes
+- Public endpoints do not require auth.
+- Ensure `tick` and `amount` fields are correct for your transaction context.
+- `encodedTransaction` expects base64; `broadcastTransaction` handles the HTTP POST for you.

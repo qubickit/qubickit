@@ -1,0 +1,27 @@
+---
+title: Errors
+description: QubicError and common failure modes
+toc:
+  float: true
+---
+
+## QubicError
+- Thrown on non-2xx HTTP/RPC/Query responses and transport failures.
+- Carries `message`, optional `status`, `code`, and `details`.
+
+```ts
+import { QubicError } from "@qubics/kit";
+
+try {
+  await rpc.call("badMethod", []);
+} catch (err) {
+  if (err instanceof QubicError) {
+    console.error(err.status, err.code, err.details);
+  }
+}
+```
+
+## Common issues
+- Missing `fetch`/AbortController: supply a custom transport.
+- Invalid base64 in low-level calls: contract functions handle base64; encode only when using raw endpoints.
+- Auth header not set: ensure `authHeaderName` is provided when `apiKey` is set.

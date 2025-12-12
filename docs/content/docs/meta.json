@@ -1,0 +1,42 @@
+{
+  "title": "Qubickit Docs",
+  "icon": "BookOpen",
+  "groups": [
+    {
+      "title": "Welcome",
+      "icon": "Home",
+      "pages": ["index"],
+      "defaultOpen": true
+    },
+    {
+      "title": "Core",
+      "icon": "Settings",
+      "pages": ["clients", "transports", "errors"]
+    },
+    {
+      "title": "Contracts",
+      "icon": "Layers",
+      "pages": ["contracts", "broadcast"]
+    },
+    {
+      "title": "Crypto & Identity",
+      "icon": "ShieldCheck",
+      "pages": ["crypto"]
+    },
+    {
+      "title": "Reference",
+      "icon": "BookOpen",
+      "pages": ["types", "reference", "changelog"]
+    },
+    {
+      "title": "Guides & Examples",
+      "icon": "Compass",
+      "pages": ["examples", "testing"]
+    },
+    {
+      "title": "Showcase & Blog",
+      "icon": "Sparkles",
+      "pages": ["showcase", "blog"]
+    }
+  ]
+}
