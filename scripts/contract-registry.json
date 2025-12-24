@@ -71,6 +71,10 @@
     {
       "contractIndex": 18,
       "githubUrl": "https://github.com/qubic/core/blob/main/src/contracts/QIP.h"
+    },
+    {
+      "contractIndex": 19,
+      "githubUrl": "https://github.com/qubic/core/blob/main/src/contracts/QRaffle.h"
     }
   ]
 }
