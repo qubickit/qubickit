@@ -121,7 +121,6 @@ export interface GetBalance_locals {
 }
 
 export interface BuyTicket_locals {
-  price: bigint;
   reward: bigint;
   capacity: bigint;
   slotsLeft: bigint;
@@ -161,14 +160,18 @@ export interface SetSchedule_output {
 
 export interface BEGIN_TICK_locals {
   winnerAddress: Uint8Array;
+  firstPlayer: Uint8Array;
   mixedSpectrumValue: any;
   entity: any;
   revenue: bigint;
   randomNum: bigint;
+  shuffleIndex: bigint;
+  swapIndex: bigint;
   winnerAmount: bigint;
   teamFee: bigint;
   distributionFee: bigint;
   burnedAmount: bigint;
+  index: bigint;
   fillWinnersInfoLocals: any;
   fillWinnersInfoInput: any;
   currentDateStamp: number;
@@ -176,6 +179,7 @@ export interface BEGIN_TICK_locals {
   currentHour: number;
   isWednesday: number;
   isScheduledToday: number;
+  hasMultipleParticipants: number;
   returnAllTicketsLocals: any;
   returnAllTicketsInput: any;
   returnAllTicketsOutput: any;
@@ -277,7 +281,6 @@ const schemas: Record<string, Schema> = {
   { name: "entity", type: { bytes: 0 } },
 ]},
   BuyTicket_locals: { kind: "struct", fields: [
-  { name: "price", type: "u64" },
   { name: "reward", type: "u64" },
   { name: "capacity", type: "u64" },
   { name: "slotsLeft", type: "u64" },
@@ -309,14 +312,18 @@ const schemas: Record<string, Schema> = {
 ]},
   BEGIN_TICK_locals: { kind: "struct", fields: [
   { name: "winnerAddress", type: "id" },
+  { name: "firstPlayer", type: "id" },
   { name: "mixedSpectrumValue", type: { bytes: 0 } },
   { name: "entity", type: { bytes: 0 } },
   { name: "revenue", type: "u64" },
   { name: "randomNum", type: "u64" },
+  { name: "shuffleIndex", type: "u64" },
+  { name: "swapIndex", type: "u64" },
   { name: "winnerAmount", type: "u64" },
   { name: "teamFee", type: "u64" },
   { name: "distributionFee", type: "u64" },
   { name: "burnedAmount", type: "u64" },
+  { name: "index", type: "u64" },
   { name: "fillWinnersInfoLocals", type: { bytes: 0 } },
   { name: "fillWinnersInfoInput", type: { bytes: 0 } },
   { name: "currentDateStamp", type: "u32" },
@@ -324,6 +331,7 @@ const schemas: Record<string, Schema> = {
   { name: "currentHour", type: "u8" },
   { name: "isWednesday", type: "u8" },
   { name: "isScheduledToday", type: "u8" },
+  { name: "hasMultipleParticipants", type: "u8" },
   { name: "returnAllTicketsLocals", type: { bytes: 0 } },
   { name: "returnAllTicketsInput", type: { bytes: 0 } },
   { name: "returnAllTicketsOutput", type: { bytes: 0 } },
