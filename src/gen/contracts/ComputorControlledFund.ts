@@ -39,6 +39,52 @@ export interface LatestTransfersEntry {
   success: any;
 }
 
+export interface SubscriptionProposalData {
+  proposerId: Uint8Array;
+  destination: Uint8Array;
+  weeksPerPeriod: number;
+  numberOfPeriods: number;
+  amountPerPeriod: bigint;
+  startEpoch: number;
+}
+
+export interface SubscriptionData {
+  destination: Uint8Array;
+  weeksPerPeriod: number;
+  numberOfPeriods: number;
+  amountPerPeriod: bigint;
+  startEpoch: number;
+  currentPeriod: number;
+}
+
+export interface RegularPaymentEntry {
+  destination: Uint8Array;
+  amount: bigint;
+  tick: number;
+  periodIndex: number;
+  success: any;
+}
+
+export interface SetProposal_input {
+  proposal: any;
+  isSubscription: number;
+  weeksPerPeriod: number;
+  startEpoch: number;
+  amountPerPeriod: bigint;
+  numberOfPeriods: number;
+}
+
+export interface SetProposal_output {
+  proposalIndex: number;
+}
+
+export interface SetProposal_locals {
+  totalEpochsForSubscription: number;
+  subIndex: number;
+  subscriptionProposal: any;
+  proposal: any;
+}
+
 export interface GetProposalIndices_input {
   activeProposals: number;
   prevProposalIndex: number;
@@ -49,13 +95,24 @@ export interface GetProposalIndices_output {
 }
 
 export interface GetProposal_input {
+  subscriptionDestination: Uint8Array;
   proposalIndex: number;
 }
 
 export interface GetProposal_output {
   okay: number;
-  proposerPubicKey: Uint8Array;
+  hasSubscriptionProposal: number;
+  hasActiveSubscription: number;
+  proposerPublicKey: Uint8Array;
   proposal: any;
+  subscription: any;
+  subscriptionProposal: any;
+}
+
+export interface GetProposal_locals {
+  subIndex: number;
+  subscriptionData: any;
+  subscriptionProposalData: any;
 }
 
 export interface GetVote_input {
@@ -82,10 +139,19 @@ export interface GetProposalFee_output {
 }
 
 export interface END_EPOCH_locals {
-  proposalIndex: number;
   proposal: any;
   results: any;
   transfer: any;
+  regularPayment: any;
+  subscription: any;
+  subscriptionProposal: any;
+  proposerPublicKey: Uint8Array;
+  currentEpoch: number;
+  epochsSinceStart: number;
+  epochsPerPeriod: number;
+  periodIndex: number;
+  existingSubIdx: number;
+  isSubscription: number;
 }
 
 export type GetLatestTransfers_input = Record<string, never>;
@@ -97,10 +163,10 @@ export type GetLatestTransfers_output = Record<string, never>;
 export type GetProposalFee_input = Record<string, never>;
 
 
-export type SetProposal_input = Record<string, never>;
+export type GetRegularPayments_input = Record<string, never>;
 
 
-export type SetProposal_output = Record<string, never>;
+export type GetRegularPayments_output = Record<string, never>;
 
 
 export type Vote_input = Record<string, never>;
@@ -121,6 +187,46 @@ const schemas: Record<string, Schema> = {
   { name: "tick", type: "u32" },
   { name: "success", type: { bytes: 0 } },
 ]},
+  SubscriptionProposalData: { kind: "struct", fields: [
+  { name: "proposerId", type: "id" },
+  { name: "destination", type: "id" },
+  { name: "weeksPerPeriod", type: "u8" },
+  { name: "numberOfPeriods", type: "u32" },
+  { name: "amountPerPeriod", type: "u64" },
+  { name: "startEpoch", type: "u32" },
+]},
+  SubscriptionData: { kind: "struct", fields: [
+  { name: "destination", type: "id" },
+  { name: "weeksPerPeriod", type: "u8" },
+  { name: "numberOfPeriods", type: "u32" },
+  { name: "amountPerPeriod", type: "u64" },
+  { name: "startEpoch", type: "u32" },
+  { name: "currentPeriod", type: "i32" },
+]},
+  RegularPaymentEntry: { kind: "struct", fields: [
+  { name: "destination", type: "id" },
+  { name: "amount", type: "i64" },
+  { name: "tick", type: "u32" },
+  { name: "periodIndex", type: "i32" },
+  { name: "success", type: { bytes: 0 } },
+]},
+  SetProposal_input: { kind: "struct", fields: [
+  { name: "proposal", type: { bytes: 0 } },
+  { name: "isSubscription", type: "u8" },
+  { name: "weeksPerPeriod", type: "u8" },
+  { name: "startEpoch", type: "u32" },
+  { name: "amountPerPeriod", type: "u64" },
+  { name: "numberOfPeriods", type: "u32" },
+]},
+  SetProposal_output: { kind: "struct", fields: [
+  { name: "proposalIndex", type: "u16" },
+]},
+  SetProposal_locals: { kind: "struct", fields: [
+  { name: "totalEpochsForSubscription", type: "u32" },
+  { name: "subIndex", type: "i32" },
+  { name: "subscriptionProposal", type: { bytes: 0 } },
+  { name: "proposal", type: { bytes: 0 } },
+]},
   GetProposalIndices_input: { kind: "struct", fields: [
   { name: "activeProposals", type: "u8" },
   { name: "prevProposalIndex", type: "i32" },
@@ -129,12 +235,22 @@ const schemas: Record<string, Schema> = {
   { name: "numOfIndices", type: "u16" },
 ]},
   GetProposal_input: { kind: "struct", fields: [
+  { name: "subscriptionDestination", type: "id" },
   { name: "proposalIndex", type: "u16" },
 ]},
   GetProposal_output: { kind: "struct", fields: [
   { name: "okay", type: "u8" },
-  { name: "proposerPubicKey", type: "id" },
+  { name: "hasSubscriptionProposal", type: "u8" },
+  { name: "hasActiveSubscription", type: "u8" },
+  { name: "proposerPublicKey", type: "id" },
   { name: "proposal", type: { bytes: 0 } },
+  { name: "subscription", type: { bytes: 0 } },
+  { name: "subscriptionProposal", type: { bytes: 0 } },
+]},
+  GetProposal_locals: { kind: "struct", fields: [
+  { name: "subIndex", type: "i32" },
+  { name: "subscriptionData", type: { bytes: 0 } },
+  { name: "subscriptionProposalData", type: { bytes: 0 } },
 ]},
   GetVote_input: { kind: "struct", fields: [
   { name: "voter", type: "id" },
@@ -155,10 +271,19 @@ const schemas: Record<string, Schema> = {
   { name: "proposalFee", type: "u32" },
 ]},
   END_EPOCH_locals: { kind: "struct", fields: [
-  { name: "proposalIndex", type: "i32" },
   { name: "proposal", type: { bytes: 0 } },
   { name: "results", type: { bytes: 0 } },
   { name: "transfer", type: { bytes: 0 } },
+  { name: "regularPayment", type: { bytes: 0 } },
+  { name: "subscription", type: { bytes: 0 } },
+  { name: "subscriptionProposal", type: { bytes: 0 } },
+  { name: "proposerPublicKey", type: "id" },
+  { name: "currentEpoch", type: "u32" },
+  { name: "epochsSinceStart", type: "u32" },
+  { name: "epochsPerPeriod", type: "u32" },
+  { name: "periodIndex", type: "i32" },
+  { name: "existingSubIdx", type: "i32" },
+  { name: "isSubscription", type: "u8" },
 ]},
   GetLatestTransfers_input: { kind: "struct", fields: [
 ]},
@@ -166,9 +291,9 @@ const schemas: Record<string, Schema> = {
 ]},
   GetProposalFee_input: { kind: "struct", fields: [
 ]},
-  SetProposal_input: { kind: "struct", fields: [
+  GetRegularPayments_input: { kind: "struct", fields: [
 ]},
-  SetProposal_output: { kind: "struct", fields: [
+  GetRegularPayments_output: { kind: "struct", fields: [
 ]},
   Vote_input: { kind: "struct", fields: [
 ]},
@@ -193,6 +318,7 @@ export const contract: ContractSurface = {
     { name: "GetVotingResults", selector: 4, input: "GetVotingResults_input", output: "GetVotingResults_output", inputSchema: schemas["GetVotingResults_input"], outputSchema: schemas["GetVotingResults_output"] },
     { name: "GetLatestTransfers", selector: 5, input: "GetLatestTransfers_input", output: "GetLatestTransfers_output", inputSchema: schemas["GetLatestTransfers_input"], outputSchema: schemas["GetLatestTransfers_output"] },
     { name: "GetProposalFee", selector: 6, input: "GetProposalFee_input", output: "GetProposalFee_output", inputSchema: schemas["GetProposalFee_input"], outputSchema: schemas["GetProposalFee_output"] },
+    { name: "GetRegularPayments", selector: 7, input: "GetRegularPayments_input", output: "GetRegularPayments_output", inputSchema: schemas["GetRegularPayments_input"], outputSchema: schemas["GetRegularPayments_output"] },
   ],
   procedures: [
     { name: "SetProposal", selector: 1, input: "SetProposal_input", output: "SetProposal_output", inputSchema: schemas["SetProposal_input"], outputSchema: schemas["SetProposal_output"] },
@@ -283,6 +409,18 @@ export const functions = {
     const raw = resp?.responseData ? fromBase64(resp.responseData) : new Uint8Array();
     return decodeOutput("GetProposalFee_output", raw) as GetProposalFee_output;
   },
+  async GetRegularPayments(client: { querySmartContract: (req: any) => Promise<any> }, contractIndex: number, input: GetRegularPayments_input): Promise<GetRegularPayments_output> {
+    const payload = encodeInput("GetRegularPayments_input", input);
+    const request = {
+      contractIndex,
+      inputType: 7,
+      inputSize: payload.length,
+      requestData: toBase64(payload),
+    };
+    const resp = await client.querySmartContract(request);
+    const raw = resp?.responseData ? fromBase64(resp.responseData) : new Uint8Array();
+    return decodeOutput("GetRegularPayments_output", raw) as GetRegularPayments_output;
+  },
 };
 
 export const procedures = {
@@ -311,6 +449,7 @@ export function createClient(
       GetVotingResults: async (input: GetVotingResults_input): Promise<GetVotingResults_output> => functions.GetVotingResults(client, contractIndex, input),
       GetLatestTransfers: async (input: GetLatestTransfers_input): Promise<GetLatestTransfers_output> => functions.GetLatestTransfers(client, contractIndex, input),
       GetProposalFee: async (input: GetProposalFee_input): Promise<GetProposalFee_output> => functions.GetProposalFee(client, contractIndex, input),
+      GetRegularPayments: async (input: GetRegularPayments_input): Promise<GetRegularPayments_output> => functions.GetRegularPayments(client, contractIndex, input),
     },
     procedures: {
       SetProposal: (input: SetProposal_input) => procedures.SetProposal(input),
