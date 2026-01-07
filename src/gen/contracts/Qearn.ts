@@ -165,6 +165,21 @@ export interface StatsInfo {
   rewardedAmount: bigint;
 }
 
+export type _RemoveGapsInLockerArray_input = Record<string, never>;
+
+
+export type _RemoveGapsInLockerArray_output = Record<string, never>;
+
+
+export interface _RemoveGapsInLockerArray_locals {
+  tmpEpochIndex: any;
+  INITIALIZE_USER: any;
+  _t: number;
+  st: number;
+  en: number;
+  startEpoch: number;
+}
+
 export interface getStateOfRound_locals {
   firstEpoch: number;
 }
@@ -202,6 +217,8 @@ export interface lock_locals {
   log: any;
   t: number;
   endIndex: number;
+  gapRemovalInput: any;
+  gapRemovalOutput: any;
 }
 
 export interface unlock_locals {
@@ -246,15 +263,14 @@ export interface END_EPOCH_locals {
   tmpEpochIndex: any;
   tmpStats: any;
   log: any;
+  gapRemovalInput: any;
+  gapRemovalOutput: any;
   _rewardPercent: bigint;
   _rewardAmount: bigint;
   _burnAmount: bigint;
   transferAmount: bigint;
   lockedEpoch: number;
-  startEpoch: number;
   _t: number;
-  st: number;
-  en: number;
   endIndex: number;
 }
 
@@ -372,6 +388,18 @@ const schemas: Record<string, Schema> = {
   { name: "boostedAmount", type: "u64" },
   { name: "rewardedAmount", type: "u64" },
 ]},
+  _RemoveGapsInLockerArray_input: { kind: "struct", fields: [
+]},
+  _RemoveGapsInLockerArray_output: { kind: "struct", fields: [
+]},
+  _RemoveGapsInLockerArray_locals: { kind: "struct", fields: [
+  { name: "tmpEpochIndex", type: { bytes: 0 } },
+  { name: "INITIALIZE_USER", type: { bytes: 0 } },
+  { name: "_t", type: "u32" },
+  { name: "st", type: "i32" },
+  { name: "en", type: "i32" },
+  { name: "startEpoch", type: "u32" },
+]},
   getStateOfRound_locals: { kind: "struct", fields: [
   { name: "firstEpoch", type: "u32" },
 ]},
@@ -403,6 +431,8 @@ const schemas: Record<string, Schema> = {
   { name: "log", type: { bytes: 0 } },
   { name: "t", type: "u32" },
   { name: "endIndex", type: "u32" },
+  { name: "gapRemovalInput", type: { bytes: 0 } },
+  { name: "gapRemovalOutput", type: { bytes: 0 } },
 ]},
   unlock_locals: { kind: "struct", fields: [
   { name: "updatedRoundInfo", type: { bytes: 0 } },
@@ -444,15 +474,14 @@ const schemas: Record<string, Schema> = {
   { name: "tmpEpochIndex", type: { bytes: 0 } },
   { name: "tmpStats", type: { bytes: 0 } },
   { name: "log", type: { bytes: 0 } },
+  { name: "gapRemovalInput", type: { bytes: 0 } },
+  { name: "gapRemovalOutput", type: { bytes: 0 } },
   { name: "_rewardPercent", type: "u64" },
   { name: "_rewardAmount", type: "u64" },
   { name: "_burnAmount", type: "u64" },
   { name: "transferAmount", type: "i64" },
   { name: "lockedEpoch", type: "u32" },
-  { name: "startEpoch", type: "u32" },
   { name: "_t", type: "u32" },
-  { name: "st", type: "i32" },
-  { name: "en", type: "i32" },
   { name: "endIndex", type: "u32" },
 ]},
 };

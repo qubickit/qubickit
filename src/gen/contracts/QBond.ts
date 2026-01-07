@@ -216,6 +216,7 @@ export interface Stake_locals {
   counter: bigint;
   amountToStake: bigint;
   amountAndFee: bigint;
+  stakeLimitPerUser: bigint;
   tempStakeEntry: any;
   tempMbondInfo: any;
 }
@@ -311,6 +312,8 @@ export interface BEGIN_EPOCH_locals {
   assetIt: any;
   mbondIdentity: Uint8Array;
   elementIndex: bigint;
+  counter: bigint;
+  tempOrder: any;
 }
 
 export interface POST_INCOMING_TRANSFER_locals {
@@ -481,6 +484,7 @@ const schemas: Record<string, Schema> = {
   { name: "counter", type: "u64" },
   { name: "amountToStake", type: "i64" },
   { name: "amountAndFee", type: "u64" },
+  { name: "stakeLimitPerUser", type: "u64" },
   { name: "tempStakeEntry", type: { bytes: 0 } },
   { name: "tempMbondInfo", type: { bytes: 0 } },
 ]},
@@ -564,6 +568,8 @@ const schemas: Record<string, Schema> = {
   { name: "assetIt", type: { bytes: 0 } },
   { name: "mbondIdentity", type: "id" },
   { name: "elementIndex", type: "i64" },
+  { name: "counter", type: "u64" },
+  { name: "tempOrder", type: { bytes: 0 } },
 ]},
   POST_INCOMING_TRANSFER_locals: { kind: "struct", fields: [
   { name: "tempMbondInfo", type: { bytes: 0 } },
